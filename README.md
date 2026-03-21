@@ -4,6 +4,8 @@ MCP server that exposes ThoughtProof reasoning verification as a tool for Claude
 
 ThoughtProof runs adversarial multi-model critique on a claim and returns a verdict (`ALLOW` / `HOLD` / `UNCERTAIN` / `DISSENT`), a confidence score, and up to 3 key objections.
 
+[![thoughtproof-mcp MCP server](https://glama.ai/mcp/servers/ThoughtProof/thoughtproof-mcp/badges/card.svg)](https://glama.ai/mcp/servers/ThoughtProof/thoughtproof-mcp)
+
 ## Install
 
 ```bash
