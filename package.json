@@ -1,0 +1,33 @@
+{
+  "name": "thoughtproof-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for ThoughtProof reasoning verification",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "thoughtproof-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}
