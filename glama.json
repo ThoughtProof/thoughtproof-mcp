@@ -1,0 +1,38 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["ThoughtProof"],
+  "name": "thoughtproof-mcp",
+  "description": "Verify AI reasoning with adversarial multi-model consensus. 4 LLMs (Grok, Gemini, DeepSeek, Sonnet) challenge each claim — returns ALLOW, BLOCK, or UNCERTAIN with confidence score and objections.",
+  "type": "mcp_server",
+  "status": "stable",
+  "framework": "@modelcontextprotocol/sdk",
+  "tools": 2,
+  "transport": ["stdio"],
+  "keywords": [
+    "verification",
+    "ai-safety",
+    "reasoning",
+    "multi-model",
+    "adversarial",
+    "trust",
+    "decision-verification",
+    "mcp-server",
+    "x402",
+    "erc-8183",
+    "base"
+  ],
+  "features": {
+    "adversarial_verification": {
+      "enabled": true,
+      "note": "4 LLMs challenge each claim independently"
+    },
+    "trust_scores": {
+      "enabled": true,
+      "note": "Agent trust score lookup via ERC-8004"
+    },
+    "x402_payment": {
+      "enabled": true,
+      "note": "Pay-per-verification via USDC on Base"
+    }
+  }
+}
