@@ -1,0 +1,25 @@
+# Smithery configuration for ThoughtProof MCP Server
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      apiKey:
+        type: string
+        title: "ThoughtProof Operator API Key"
+        description: "Optional. Get one at thoughtproof.ai. Without it, you'll get x402 payment prompts."
+      baseUrl:
+        type: string
+        default: "https://api.thoughtproof.ai"
+        description: "ThoughtProof API base URL"
+  commandFunction: |
+    (config) => ({
+      command: 'npx',
+      args: ['-y', 'thoughtproof-mcp'],
+      env: {
+        THOUGHTPROOF_API_KEY: config.apiKey || '',
+        THOUGHTPROOF_BASE_URL: config.baseUrl || 'https://api.thoughtproof.ai'
+      }
+    })
+  exampleConfig:
+    apiKey: "tp_op_your_key_here"
