@@ -39,20 +39,40 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
   });
 
   if (response.status === 402) {
+    // Parse the x402 discovery response for accurate pricing
+    let details: any = {};
+    try {
+      details = await response.json();
+    } catch {}
+
+    const maxAmount = details?.accepts?.[0]?.maxAmountRequired;
+    const priceUSD = maxAmount ? `$${(parseInt(maxAmount) / 1_000_000).toFixed(3)}` : "varies";
+
     return {
       error: "payment_required",
       message:
-        "This verification requires payment. " +
+        "Verification requires payment via x402 (USDC on Base). " +
         (API_KEY
           ? "Your operator key may not have sufficient credits."
-          : "Set THOUGHTPROOF_API_KEY for authenticated access, or visit thoughtproof.ai for pricing."),
+          : "Set THOUGHTPROOF_API_KEY environment variable for authenticated access."),
       pricing: {
         fast: "$0.008",
         standard: "$0.02",
         deep: "$0.08",
+        thisRequest: priceUSD,
         payment: "x402 / USDC on Base",
+        payTo: details?.accepts?.[0]?.payTo ?? "0xAB9f84864662f980614bD1453dB9950Ef2b82E83",
       },
+      setup:
+        "To use this tool, you need a ThoughtProof operator key.\n" +
+        "1. Register at: POST https://api.thoughtproof.ai/v1/operators\n" +
+        "2. Set: THOUGHTPROOF_API_KEY=tp_op_your_key\n" +
+        "3. Restart the MCP server",
     };
+  }
+
+  if (response.status === 404) {
+    return { error: "not_found", message: `Resource not found at ${path}` };
   }
 
   if (!response.ok) {
@@ -171,6 +191,13 @@ function formatVerdict(result: any, claim: string): string {
 }
 
 function formatAgentScore(result: any, agentId: string): string {
+  if (result.error === "not_found") {
+    return `❌ Agent **${agentId}** not found.\n\nMake sure the agent ID is correct. Agents must be registered via POST /v1/agents first.`;
+  }
+  if (result.error) {
+    return `⚠️ Error looking up agent ${agentId}: ${result.message ?? result.error}`;
+  }
+
   const score = result.score?.composite;
   const events = result.eventCount ?? 0;
 
@@ -188,7 +215,13 @@ function formatPaymentRequired(result: any): string {
   output += `- Fast (2 models): ${result.pricing.fast}\n`;
   output += `- Standard (4 models): ${result.pricing.standard}\n`;
   output += `- Deep (5+ models): ${result.pricing.deep}\n`;
+  if (result.pricing.thisRequest) {
+    output += `- This request: ${result.pricing.thisRequest}\n`;
+  }
   output += `- Payment: ${result.pricing.payment}\n`;
+  if (result.setup) {
+    output += `\n**Setup:**\n${result.setup}\n`;
+  }
   return output;
 }
 
