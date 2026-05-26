@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-05-26
+
+### Fixed
+- Corrected pipeline description: 3–4 models evaluate independently → 1 red-team critic → 1 synthesizer (was incorrectly described as "models challenge each other")
+- Updated architecture diagram to show 3-stage pipeline accurately
+- Fixed glama.json description
+
 ## [0.2.0] - 2026-05-26
 
 ### Changed

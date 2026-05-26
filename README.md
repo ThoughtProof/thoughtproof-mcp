@@ -6,7 +6,7 @@
 
 MCP server for [ThoughtProof](https://thoughtproof.ai) — verify AI reasoning with adversarial multi-model consensus.
 
-4 LLMs (Grok, Gemini, DeepSeek, Sonnet) challenge each other on every claim. Returns **ALLOW**, **BLOCK**, or **UNCERTAIN** with confidence score and objections.
+3–4 LLMs (Grok, Gemini, DeepSeek, Sonnet) independently evaluate every claim. A dedicated red-team model critiques their verdicts. A synthesizer (Sonnet) weighs everything and returns **ALLOW**, **BLOCK**, or **UNCERTAIN** with confidence score and objections.
 
 ## Quick Start
 
@@ -81,15 +81,23 @@ Your AI Agent
     │
     ▼
 ┌──────────────────┐
-│  ThoughtProof API │  ← api.thoughtproof.ai
+│  ThoughtProof API │  ← api.thoughtproof.ai (RV)
 └──────────────────┘
     │
     ▼
-┌──────────────────────────────────────┐
-│  4 Independent LLMs (adversarial)    │
-│  Grok · Gemini · DeepSeek · Sonnet   │
-│  Each challenges the claim separately │
-└──────────────────────────────────────┘
+┌───────────────────────────────────────────┐
+│  Stage 1: Independent Evaluation       │
+│  3–4 LLMs (Grok, Gemini, DeepSeek,     │
+│  Sonnet) each examine the claim         │
+│                                         │
+│  Stage 2: Red-Team Critique             │
+│  1 dedicated model challenges all       │
+│  initial verdicts                        │
+│                                         │
+│  Stage 3: Synthesis                     │
+│  Sonnet weighs verdicts + critique      │
+│  → final decision                       │
+└───────────────────────────────────────────┘
     │
     ▼
   ALLOW / BLOCK / UNCERTAIN

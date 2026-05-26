@@ -2,8 +2,8 @@
 /**
  * ThoughtProof MCP Server
  *
- * Verify AI reasoning with adversarial multi-model consensus.
- * 4 LLMs (Grok, Gemini, DeepSeek, Sonnet) challenge each other.
+ * Verify AI reasoning with adversarial multi-model verification.
+ * 3–4 LLMs evaluate independently → 1 red-team critic → 1 synthesizer.
  *
  * Tools:
  *   - verify_claim: Verify any claim or AI-generated reasoning
@@ -26,7 +26,7 @@ const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
 async function apiCall(path: string, body?: Record<string, unknown>): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.2.0",
+    "User-Agent": "thoughtproof-mcp/0.2.1",
   };
   if (API_KEY) {
     headers["X-Operator-Key"] = API_KEY;
@@ -87,7 +87,7 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
 
 const server = new McpServer({
   name: "thoughtproof",
-  version: "0.2.0",
+  version: "0.2.1",
 });
 
 // Tool 1: verify_claim

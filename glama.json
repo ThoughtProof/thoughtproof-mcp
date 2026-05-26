@@ -2,7 +2,7 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "maintainers": ["ThoughtProof"],
   "name": "thoughtproof-mcp",
-  "description": "Verify AI reasoning with adversarial multi-model consensus. 4 LLMs (Grok, Gemini, DeepSeek, Sonnet) challenge each claim — returns ALLOW, BLOCK, or UNCERTAIN with confidence score and objections.",
+  "description": "Verify AI reasoning with adversarial multi-model verification. 3–4 LLMs evaluate independently, a dedicated red-team model critiques all verdicts, and a synthesizer produces the final decision — ALLOW, BLOCK, or UNCERTAIN with confidence score and objections.",
   "type": "mcp_server",
   "status": "stable",
   "framework": "@modelcontextprotocol/sdk",
