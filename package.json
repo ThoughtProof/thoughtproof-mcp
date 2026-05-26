@@ -1,6 +1,6 @@
 {
   "name": "thoughtproof-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for ThoughtProof — verify AI reasoning with adversarial multi-model consensus",
   "type": "module",
   "main": "dist/index.js",
@@ -11,13 +11,38 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "inspect": "npx @modelcontextprotocol/inspector tsx src/index.ts"
+    "test": "node --test test/*.test.js",
+    "inspect": "npx @modelcontextprotocol/inspector tsx src/index.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
-  "keywords": ["mcp", "thoughtproof", "verification", "ai-safety", "reasoning", "multi-model"],
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "thoughtproof",
+    "verification",
+    "ai-safety",
+    "reasoning",
+    "multi-model",
+    "adversarial",
+    "x402",
+    "erc-8004",
+    "decision-verification"
+  ],
   "author": "ThoughtProof <raul@thoughtproof.ai>",
+  "homepage": "https://thoughtproof.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ThoughtProof/thoughtproof-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ThoughtProof/thoughtproof-mcp/issues"
+  },
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
@@ -25,5 +50,5 @@
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   },
-  "files": ["dist"]
+  "files": ["dist", "CHANGELOG.md"]
 }

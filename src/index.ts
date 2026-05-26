@@ -26,7 +26,7 @@ const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
 async function apiCall(path: string, body?: Record<string, unknown>): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.1.0",
+    "User-Agent": "thoughtproof-mcp/0.2.0",
   };
   if (API_KEY) {
     headers["X-Operator-Key"] = API_KEY;
@@ -87,7 +87,7 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
 
 const server = new McpServer({
   name: "thoughtproof",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 // Tool 1: verify_claim
