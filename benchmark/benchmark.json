@@ -1,0 +1,145 @@
+{
+  "generatedAt": "2026-06-12T12:47:28.514Z",
+  "source": "verified-trading-agent runs/decisions.jsonl",
+  "agent": {
+    "erc8004": "SKALE Agent #571",
+    "model": "Kimi K2.6 (outside the RV panel)"
+  },
+  "verification": "Sentinel (pre-execution gate) → RV adversarial panel (SERV Reasoning). Merge: BLOCK > UNCERTAIN > ALLOW.",
+  "window": {
+    "from": "2026-06-10T05:22:06.833Z",
+    "to": "2026-06-12T12:43:14.716Z"
+  },
+  "universe": {
+    "uniqueAssets": 33,
+    "venues": [
+      "Binance (CEX)",
+      "DEX via GeckoTerminal"
+    ]
+  },
+  "calibrationCutoff": "2026-06-11T19:24:00Z",
+  "overall": {
+    "cycles": 121,
+    "tradeAttempts": 8,
+    "blocked": 5,
+    "uncertainSelfCorrected": 3,
+    "executed": 0,
+    "flatVoluntary": 113,
+    "interventionRatePct": 100,
+    "blocks": [
+      {
+        "cycle": 1,
+        "symbol": "BTCUSDT",
+        "action": "open 5x long BTC, 10000 USDC margin"
+      },
+      {
+        "cycle": 2,
+        "symbol": "BTCUSDT",
+        "action": "open 4x long BTC, 10000 USDC margin"
+      },
+      {
+        "cycle": 3,
+        "symbol": "BTCUSDT",
+        "action": "open 4x long BTC, 10000 USDC margin"
+      },
+      {
+        "cycle": 4,
+        "symbol": "BTCUSDT",
+        "action": "open 5x short BTC, 10000 USDC margin"
+      },
+      {
+        "cycle": 5,
+        "symbol": "BTCUSDT",
+        "action": "open 5x long BTC, 5000 USDC margin"
+      }
+    ],
+    "selfCorrections": [
+      {
+        "cycle": 109,
+        "symbol": "UTKUSDT",
+        "wanted": "open 2x short UTK, 10000 USDC margin",
+        "side": "short"
+      },
+      {
+        "cycle": 116,
+        "symbol": "WLDUSDT",
+        "wanted": "open 2x long WLD, 5000 USDC margin",
+        "side": "long"
+      },
+      {
+        "cycle": 118,
+        "symbol": "INJUSDT",
+        "wanted": "open 2x short INJ, 4000 USDC margin",
+        "side": "short"
+      }
+    ]
+  },
+  "postCalibration": {
+    "cycles": 16,
+    "tradeAttempts": 3,
+    "blocked": 0,
+    "uncertainSelfCorrected": 3,
+    "executed": 0,
+    "flatVoluntary": 13,
+    "interventionRatePct": 100,
+    "blocks": [],
+    "selfCorrections": [
+      {
+        "cycle": 109,
+        "symbol": "UTKUSDT",
+        "wanted": "open 2x short UTK, 10000 USDC margin",
+        "side": "short"
+      },
+      {
+        "cycle": 116,
+        "symbol": "WLDUSDT",
+        "wanted": "open 2x long WLD, 5000 USDC margin",
+        "side": "long"
+      },
+      {
+        "cycle": 118,
+        "symbol": "INJUSDT",
+        "wanted": "open 2x short INJ, 4000 USDC margin",
+        "side": "short"
+      }
+    ]
+  },
+  "preCalibration": {
+    "cycles": 105,
+    "tradeAttempts": 5,
+    "blocked": 5,
+    "uncertainSelfCorrected": 0,
+    "executed": 0,
+    "flatVoluntary": 100,
+    "interventionRatePct": 100,
+    "blocks": [
+      {
+        "cycle": 1,
+        "symbol": "BTCUSDT",
+        "action": "open 5x long BTC, 10000 USDC margin"
+      },
+      {
+        "cycle": 2,
+        "symbol": "BTCUSDT",
+        "action": "open 4x long BTC, 10000 USDC margin"
+      },
+      {
+        "cycle": 3,
+        "symbol": "BTCUSDT",
+        "action": "open 4x long BTC, 10000 USDC margin"
+      },
+      {
+        "cycle": 4,
+        "symbol": "BTCUSDT",
+        "action": "open 5x short BTC, 10000 USDC margin"
+      },
+      {
+        "cycle": 5,
+        "symbol": "BTCUSDT",
+        "action": "open 5x long BTC, 5000 USDC margin"
+      }
+    ],
+    "selfCorrections": []
+  },
+  "methodologyNote": "Cycles before the calibration cutoff ran an early agent prompt and were hard-blocked during initial setup. We report them separately and lead with post-calibration behavior, where the agent proposed trades with genuine conviction and the Sentinel→RV pipeline flagged each one. Zero trades executed across the full window."
+}

@@ -8,6 +8,9 @@
  * Tools:
  *   - verify_claim: Verify any claim or AI-generated reasoning
  *   - check_agent_score: Get an agent's trust score
+ *   - verify_trade: Pre-execution gate for autonomous trading/action agents.
+ *                   Full Sentinel → RV pipeline (powered by SERV Reasoning).
+ *                   Returns ALLOW / BLOCK / UNCERTAIN + structured objections.
  *
  * Usage:
  *   npx thoughtproof-mcp                          # stdio mode
@@ -17,6 +20,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { verifyTrade, PaymentRequiredError } from "./verify-client.js";
 
 const API_BASE = process.env.THOUGHTPROOF_BASE_URL || "https://api.thoughtproof.ai";
 const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
@@ -164,7 +168,115 @@ server.tool(
   }
 );
 
+// Tool 3: verify_trade — pre-execution gate for autonomous trading/action agents.
+// Full Sentinel → RV pipeline (SERV Reasoning panel). This is the tool the
+// Coinbase agent stack / CB4A calls before executing a trade.
+server.tool(
+  "verify_trade",
+  {
+    action: z
+      .string()
+      .min(1)
+      .describe(
+        "The action the agent intends to execute, e.g. 'open 5x long BTC, 8000 USDC margin' or 'swap 10 ETH for USDC'."
+      ),
+    thesis: z
+      .string()
+      .min(1)
+      .describe("The agent's one-line decisive rationale for the action."),
+    reasoning: z
+      .string()
+      .min(1)
+      .describe(
+        "The full reasoning chain that produced the decision — the actual chain of thought, not a summary. This is what ThoughtProof verifies."
+      ),
+    situation: z
+      .string()
+      .optional()
+      .describe(
+        "Optional market/context snapshot WITHOUT the chosen action. Lets the adversarial panel form an independent view before seeing the decision (stronger verification)."
+      ),
+    stakeLevel: z
+      .enum(["micro", "low", "medium", "high", "critical"])
+      .optional()
+      .describe(
+        "Stake level — drives the verdict threshold. Higher stake demands higher reasoning soundness to ALLOW: the SAME decision can ALLOW at low stake and BLOCK/UNCERTAIN at critical stake. Default 'high' (suitable for leveraged capital). 'micro' runs the fast Sentinel-only gate; everything else runs the full Sentinel→RV adversarial pipeline."
+      ),
+  },
+  async ({ action, thesis, reasoning, situation, stakeLevel }) => {
+    try {
+      const result = await verifyTrade(
+        { action, thesis, reasoning, situation, stakeLevel },
+        {
+          apiKey: API_KEY || undefined,
+          x402PaymentSignature: process.env.THOUGHTPROOF_X402_PAYSIG,
+          sentinelTier:
+            (process.env.SENTINEL_TIER as "checkpoint" | "standard" | undefined) ?? "checkpoint",
+        }
+      );
+      return {
+        content: [{ type: "text" as const, text: formatTradeVerdict(result, action) }],
+      };
+    } catch (err) {
+      if (err instanceof PaymentRequiredError) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `⚠️ **Payment Required (x402)**\n\n${err.message}\n\n` +
+                `Set THOUGHTPROOF_API_KEY to bypass, or supply THOUGHTPROOF_X402_PAYSIG with a settled payment payload.`,
+            },
+          ],
+        };
+      }
+      return {
+        content: [{ type: "text" as const, text: `⚠️ Verification error: ${String(err)}` }],
+      };
+    }
+  }
+);
+
 // --- Formatters ---
+
+function formatTradeVerdict(
+  result: import("./verify-client.js").VerifyTradeResult,
+  action: string
+): string {
+  const icon =
+    result.verdict === "ALLOW" ? "✅" : result.verdict === "BLOCK" ? "❌" : "⚠️";
+  let out = `${icon} **${result.verdict}**\n\n`;
+  out += `**Action:** ${action.length > 200 ? action.slice(0, 200) + "..." : action}\n`;
+  out += `**Recommendation:** ${result.recommendation}\n`;
+
+  if (result.objections.length > 0) {
+    out += `\n**Objections (reason about these before acting):**\n`;
+    for (const o of result.objections) {
+      out += `- [${o.severity}] ${o.explanation}\n`;
+    }
+  } else {
+    out += `\nNo objections raised.\n`;
+  }
+
+  out += `\n_Route: ${result.route}`;
+  if (result.rv?.modelCount) out += ` · ${result.rv.modelCount}-model adversarial panel`;
+  out += ` · ${(result.latencyMs / 1000).toFixed(1)}s_`;
+
+  const anchors: string[] = [];
+  if (result.attestation.sentinelClaimHash)
+    anchors.push(`sentinel:${result.attestation.sentinelClaimHash.slice(0, 18)}…`);
+  if (result.attestation.rvSignature)
+    anchors.push(`rv-sig:${result.attestation.rvSignature.slice(0, 18)}…`);
+  if (anchors.length) out += `\n_Attestation: ${anchors.join(" · ")}_`;
+
+  if (result.payment && result.payment.method !== "none" && result.payment.method !== "api-key") {
+    out += `\n_Paid via ${result.payment.method}`;
+    if (result.payment.txHash) out += ` (${result.payment.txHash.slice(0, 18)}…)`;
+    out += `_`;
+  }
+
+  return out;
+}
 
 function formatVerdict(result: any, claim: string): string {
   const verdict = result.verdict ?? "UNKNOWN";

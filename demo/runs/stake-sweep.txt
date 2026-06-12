@@ -1,0 +1,5 @@
+stake=micro    → ALLOW     conf=0.82 objections=1 models=3 mdi=0.871 (47s)
+stake=low      → ALLOW     conf=0.92 objections=0 models=3 mdi=0.87 (45s)
+stake=medium   → ALLOW     conf=0.72 objections=2 models=3 mdi=0.856 (63s)
+stake=high     → BLOCK     conf=0.8 objections=3 models=3 mdi=0.871 (63s)
+stake=critical → UNCERTAIN conf=0.62 objections=3 models=3 mdi=0.86 (72s)

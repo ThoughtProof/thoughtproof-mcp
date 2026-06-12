@@ -1,0 +1,51 @@
+════════════════════════════════════════════════════════════
+ CB-STACK AGENT + ThoughtProof verify_trade (LIVE)
+ Every proposed trade is verified before it reaches CB4A.
+════════════════════════════════════════════════════════════
+
+┌─ Example 1 — Reckless leverage chase (high stake)
+│  Agent proposes: open 5x long PEPE, 20000 USDC margin
+│  Thesis: PEPE +140% in 24h on huge volume; ride the parabola.
+│  → calling verify_trade (MCP) before execution…
+│  ← BLOCK (pipeline, 70.2s)
+│    RV: 3-model adversarial panel, conf 0.95
+│    on-chain signer: 0xabdde1a06eebd934fea35d4385cf68f43acc986d
+│  Verdict BLOCK → NOT executing. Objections returned to agent:
+│    1. [medium] Liquidity/Volume Confusion. The agent conflates $30M volume with liquidity. Pool depth is $400k. A $20k position at 5x = $100k notional. Tha…
+│    2. [medium] No Stop-Loss on 5x Leverage. "No stop, I'll add more if it dips" on a 5x leveraged position means a 20% adverse move = 100% margin wipe. RSI…
+│    3. [medium] Averaging Down Into Illiquid Reversal. "Add more if it dips" on a 5x leveraged meme coin with $400k pool liquidity is a liquidation accelera…
+│  Agent reasons over objections → stands down (capital preserved).
+└─ no trade. ✅ avoided.
+
+┌─ Example 2 — Disciplined, defined-risk entry (medium stake)
+│  Agent proposes: open 1.5x long BTC, 3000 USDC margin (account 50k, risking 0.9%)
+│  Thesis: BTC held the $60k weekly support for the third time on declining sell volume; small defined-risk continuation entry with a hard stop below support.
+│  → calling verify_trade (MCP) before execution…
+│  ← ALLOW (pipeline, 53.9s)
+│    RV: 3-model adversarial panel, conf 0.82
+│    on-chain signer: 0xabdde1a06eebd934fea35d4385cf68f43acc986d
+│  Verdict ALLOW → executing.
+   🟢 CB4A EXECUTED: open 1.5x long BTC, 3000 USDC margin (account 50k, risking 0.9%)
+
+┌─ Example 3 — Plausible but flawed mean-reversion short (high stake)
+│  Agent proposes: open 3x short SOL, 8000 USDC margin
+│  Thesis: SOL is overbought at RSI 78 after a 5-day run; fade the extension back to the mean.
+│  → calling verify_trade (MCP) before execution…
+│  ← BLOCK (pipeline, 72.5s)
+│    RV: 3-model adversarial panel, conf 0.95
+│    on-chain signer: 0xabdde1a06eebd934fea35d4385cf68f43acc986d
+│  Verdict BLOCK → NOT executing. Objections returned to agent:
+│    1. [medium] No invalidation level defined. "I'll watch it" is not a stop. At 3x leverage on $8,000 USDC margin, a 10% adverse move against the position …
+│    2. [medium] 3x leverage on a mean-reversion fade is structurally mismatched. Mean reversion trades have uncertain timing — SOL can remain overbought for…
+│    3. [medium] "Shorting strength is how you sell the top" is a heuristic, not a thesis. The reasoning chain contains no analysis of: (a) where the next su…
+│  Agent reasons over objections → stands down (capital preserved).
+└─ no trade. ✅ avoided.
+
+════════════════════════════════════════════════════════════
+ SUMMARY
+ Proposed: 3 | Executed: 1 | Gated: 2
+  1. Reckless leverage chase (high stake) → BLOCK (stood down)
+  2. Disciplined, defined-risk entry (medium stake) → ALLOW (executed)
+  3. Plausible but flawed mean-reversion short (high stake) → BLOCK (stood down)
+ Actions that reached CB4A: open 1.5x long BTC, 3000 USDC margin (account 50k, risking 0.9%)
+════════════════════════════════════════════════════════════
