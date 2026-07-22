@@ -10,7 +10,7 @@ proposes a trade, calls `verify_trade`, and gets back `ALLOW` / `BLOCK` /
 Autonomous agents that move real capital need a reliability layer. `verify_trade`
 routes a decision through:
 
-1. **Sentinel** — a cheap pre-execution gate (~3.5s).
+1. **Sentinel** — a pre-execution triage gate (typically 15–60s depending on tier and load).
 2. **RV** — an adversarial multi-model reasoning panel (powered by SERV Reasoning),
    for high-stakes calls that survive Sentinel.
 

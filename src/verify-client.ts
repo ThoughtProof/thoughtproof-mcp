@@ -2,7 +2,7 @@
 //
 // Routes a decision through the live ThoughtProof backends:
 //   1. Sentinel  — POST sentinel.thoughtproof.ai/sentinel/verify
-//                   cheap pre-execution gate (~3.5s, checkpoint tier).
+//                   pre-execution triage gate (typically 15–60s by tier/load).
 //   2. RV        — POST api.thoughtproof.ai/v1/check
 //                   adversarial multi-model panel (powered by SERV Reasoning),
 //                   only for high-stakes decisions that survive Sentinel.
