@@ -75,6 +75,16 @@ async function run() {
   const names = tools.map((t) => t.name);
   console.log("✓ tools/list: found", names.join(", "));
 
+  const vd = tools.find((t) => t.name === "verify_decision");
+  if (!vd) throw new Error("verify_decision tool not found");
+  console.log("✓ verify_decision present");
+
+  const vdReq = vd.inputSchema?.required ?? [];
+  for (const f of ["mandate", "proposed_action", "reasoning"]) {
+    if (!vdReq.includes(f)) throw new Error(`verify_decision missing required field: ${f}`);
+  }
+  console.log("✓ verify_decision schema:", vdReq.join(", "));
+
   const vt = tools.find((t) => t.name === "verify_trade");
   if (!vt) throw new Error("verify_trade tool not found");
   console.log("✓ verify_trade present");

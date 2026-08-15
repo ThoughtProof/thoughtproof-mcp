@@ -4,9 +4,9 @@
 [![CI](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-MCP server for [ThoughtProof](https://thoughtproof.ai) — verify AI reasoning with adversarial multi-model consensus.
+MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decision verification for AI agents.
 
-Multiple independent reasoning models (SERV Reasoning panel) evaluate every claim. A dedicated red-team model critiques their verdicts. A synthesizer weighs everything and returns **ALLOW**, **BLOCK**, or **UNCERTAIN** with confidence score and objections.
+**Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`. This change is **not published to npm**; run from this repo / branch.
 
 ## Quick Start
 
@@ -14,23 +14,55 @@ Multiple independent reasoning models (SERV Reasoning panel) evaluate every clai
 {
   "mcpServers": {
     "thoughtproof": {
-      "command": "npx",
-      "args": ["-y", "thoughtproof-mcp"],
+      "command": "node",
+      "args": ["dist/index.js"],
       "env": {
-        "THOUGHTPROOF_API_KEY": "tp_op_your_key_here"
+        "DQL_API_KEY": "dqlk_your_key_here"
       }
     }
   }
 }
 ```
 
-Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and any MCP-compatible client.
+Build first (`npm install && npm run build`). Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and any MCP-compatible client.
 
 ## Tools
 
+### `verify_decision` (hero)
+
+Pre-execution gate for a proposed action. Routing is inside the tool — not an agent quiz.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `mandate` | string | *(required)* | User's stated goal / instruction |
+| `proposed_action` | string | *(required)* | What the agent is about to do |
+| `reasoning` | string | *(required)* | The agent's own plan / reasoning |
+| `context` | string | *(optional)* | Extra evidence |
+| `mode` | `dql` / `sentinel` / `auto` | `auto` | Explicit surface, or auto-route |
+
+**Auto-route:** spend / checkout / booking / purchase / payment / cart / Stripe / price / budget / cap → DQL. High-blast irreversible exit without that language (publish, delete, deploy, send-to-prod, memory write) → Sentinel. Unsure → DQL. Explicit `mode` wins. RV / PLV are not on this path.
+
+**Camera mandate:** do **not** put the overshoot in `proposed_action` or `reasoning` (for example, do not write “price is above the cap”). The verifier has to find the mismatch.
+
+**Envelope** (always this shape):
+
+```json
+{
+  "verdict": "ALLOW",
+  "execute": true,
+  "objections": [],
+  "receipt_id": "dql_…",
+  "surface": "dql",
+  "axes": [],
+  "recommendation": "execute"
+}
+```
+
+`execute` is `true` only on `ALLOW`. `REVIEW`, `UNCERTAIN`, `BLOCK`, timeouts, HTTP 402/4xx/5xx, and missing keys return `execute: false`. Fail-closed is soft at the protocol layer — the tool does not hard-stop the host. Replan is a new call (new receipt).
+
 ### `verify_claim`
 
-Verify any claim or AI-generated reasoning before acting on it.
+Verify any claim or AI-generated reasoning via RV (`POST /v1/check`). Unchanged.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -48,82 +80,21 @@ Look up an agent's composite trust score on the ERC-8004 registry.
 | `agentId` | string | Agent ID to look up |
 | `domain` | string | Optional domain filter |
 
-## Example
+### `verify_trade`
 
-In Claude Desktop or Cursor, just ask:
-
-> "Verify the claim: GPT-5 achieves 95% accuracy on MMLU-Pro"
-
-The tool returns:
-
-```
-⚠️ UNCERTAIN (42% confidence)
-
-Claim: "GPT-5 achieves 95% accuracy on MMLU-Pro"
-
-Objections:
-- Insufficient public benchmark data to confirm
-- Historical accuracy claims have been overstated
-- MMLU-Pro methodology has known ceiling effects
-
-⚡ 3.2s | Adversarial Multi-Model Consensus
-```
-
-## How It Works
-
-```
-Your AI Agent
-    │
-    ▼
-┌──────────────────┐
-│  thoughtproof-mcp │  ← MCP Server (this package)
-└──────────────────┘
-    │
-    ▼
-┌──────────────────┐
-│  ThoughtProof API │  ← api.thoughtproof.ai (RV)
-└──────────────────┘
-    │
-    ▼
-┌───────────────────────────────────────────┐
-│  Stage 1: Independent Evaluation       │
-│  Multiple reasoning models (SERV        │
-│  panel) each examine the claim          │
-│                                         │
-│  Stage 2: Red-Team Critique             │
-│  1 dedicated model challenges all       │
-│  initial verdicts                        │
-│                                         │
-│  Stage 3: Synthesis                     │
-│  Synthesizer weighs verdicts + critique │
-│  → final decision                       │
-└───────────────────────────────────────────┘
-    │
-    ▼
-  ALLOW / BLOCK / UNCERTAIN
-  + confidence % + objections
-```
-
-## Pricing
-
-| Speed | Models | Cost per verification |
-|-------|--------|-----------------------|
-| fast | 2 | $0.008 |
-| standard | 4 | $0.02 |
-| deep | 5+ | $0.08 |
-
-Payment: API key (operator account) or x402 micropayment (USDC on Base).
-
-## API Key
-
-Get an operator API key at [thoughtproof.ai](https://thoughtproof.ai). Without a key, verifications use x402 micropayments automatically.
+Optional pre-execution gate for trading agents (Sentinel → RV). Not the default Grok path. See [VERIFY_TRADE.md](./VERIFY_TRADE.md).
 
 ## Configuration
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `THOUGHTPROOF_API_KEY` | *(none)* | Operator API key |
-| `THOUGHTPROOF_BASE_URL` | `https://api.thoughtproof.ai` | API base URL |
+| `DQL_API_KEY` | *(none)* | DQL key (`dqlk_…`) for the default `verify_decision` path. Alias: `THOUGHTPROOF_DQL_KEY` |
+| `SENTINEL_API_KEY` | *(none)* | Optional. Required only when `mode=sentinel` or auto-route picks Sentinel. Fallback: `THOUGHTPROOF_API_KEY` as `X-Sentinel-Key` |
+| `DQL_SANDBOX` | *(off)* | Set to `1` to send `sandbox: true` on DQL calls (local/dev only) |
+| `THOUGHTPROOF_API_KEY` | *(none)* | Operator key for `verify_claim` / `verify_trade` / Sentinel fallback |
+| `THOUGHTPROOF_BASE_URL` | `https://api.thoughtproof.ai` | RV API base URL (`verify_claim`) |
+
+A missing Sentinel key returns `execute: false` with “Sentinel key not configured” — it does not silently call DQL.
 
 ## Development
 
@@ -136,6 +107,8 @@ npm test
 npm run dev          # Run with tsx (hot reload)
 npm run inspect      # Test with MCP Inspector
 ```
+
+This branch is not an npm release. Do not `npm publish` from it.
 
 ## Related
 

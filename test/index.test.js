@@ -1,4 +1,4 @@
-import { describe, it, before } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -15,12 +15,32 @@ describe("thoughtproof-mcp server", () => {
     await client.connect(transport);
   });
 
-  it("should expose verify_claim and check_agent_score tools", async () => {
+  after(async () => {
+    await client?.close();
+  });
+
+  it("should expose verify_decision as the hero tool plus existing tools", async () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
+    assert.ok(names.includes("verify_decision"), "missing verify_decision");
     assert.ok(names.includes("verify_claim"), "missing verify_claim");
     assert.ok(names.includes("check_agent_score"), "missing check_agent_score");
-    assert.equal(tools.length, 2, "expected exactly 2 tools");
+  });
+
+  it("verify_decision tool has correct input schema", async () => {
+    const { tools } = await client.listTools();
+    const decision = tools.find((t) => t.name === "verify_decision");
+    assert.ok(decision.inputSchema, "missing input schema");
+    const props = decision.inputSchema.properties;
+    assert.ok(props.mandate, "missing mandate property");
+    assert.ok(props.proposed_action, "missing proposed_action property");
+    assert.ok(props.reasoning, "missing reasoning property");
+    assert.ok(props.context, "missing context property");
+    assert.ok(props.mode, "missing mode property");
+    assert.ok(
+      /must NOT put the overshoot/i.test(decision.description ?? ""),
+      "tool description must carry the camera mandate"
+    );
   });
 
   it("verify_claim tool has correct input schema", async () => {
@@ -43,9 +63,27 @@ describe("thoughtproof-mcp server", () => {
     assert.ok(props.domain, "missing domain property");
   });
 
-  it("verify_claim handles API errors gracefully", async () => {
+  it("verify_decision returns execute:false when no DQL key is configured", async () => {
+    const result = await client.callTool({
+      name: "verify_decision",
+      arguments: {
+        mandate: "Buy milk under $5",
+        proposed_action: "Purchase milk for $4",
+        reasoning: "It is under the budget",
+      },
+    });
+    assert.ok(result.content?.[0]?.text, "should return text");
+    const envelope = JSON.parse(result.content[0].text);
+    assert.equal(envelope.execute, false);
+    assert.notEqual(envelope.verdict, "ALLOW");
+    assert.equal(envelope.surface, "dql");
+    assert.match(envelope.objections.join(" "), /DQL key not configured/);
+  });
+
+  it("verify_claim handles API errors gracefully", { timeout: 20_000 }, async () => {
     // Call with a claim — will likely get 402 or error since no real key
-    // The important thing is it doesn't crash
+    // The important thing is it doesn't crash. Bounded so CI does not hang
+    // on a live RV fetch.
     const result = await client.callTool({
       name: "verify_claim",
       arguments: { claim: "Test claim for CI" },
