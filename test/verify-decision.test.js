@@ -333,6 +333,70 @@ describe("verifyDecision fail-closed (mocked HTTP)", () => {
     assert.match(env.objections.join(" "), /Sentinel key not configured/);
   });
 
+  it("maps DQL 401 ACCOUNT_UNAUTHORIZED to execute:false with one request and no token leak", async () => {
+    const presented = "dqla_unauth_probe_7k2m";
+    let called = 0;
+    let capturedUrl = "";
+    let capturedHeaders;
+    const logs = [];
+    const origLog = console.log;
+    const origErr = console.error;
+    const origWarn = console.warn;
+    const capture = (...args) => {
+      logs.push(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "));
+    };
+    console.log = capture;
+    console.error = capture;
+    console.warn = capture;
+
+    let env;
+    try {
+      env = await verifyDecision(
+        {
+          mandate: "Buy milk under $5",
+          proposed_action: "Purchase milk for $4",
+          reasoning: "Under budget",
+          mode: "dql",
+        },
+        {
+          dqlAccountToken: presented,
+          sentinelApiKey: "sentinel_must_not_be_used",
+          fetchImpl: async (url, init) => {
+            called += 1;
+            capturedUrl = String(url);
+            capturedHeaders = init.headers;
+            return new Response(
+              JSON.stringify({
+                error: "Valid account token required.",
+                code: "ACCOUNT_UNAUTHORIZED",
+              }),
+              { status: 401, statusText: "Unauthorized" }
+            );
+          },
+        }
+      );
+    } finally {
+      console.log = origLog;
+      console.error = origErr;
+      console.warn = origWarn;
+    }
+
+    assert.equal(called, 1);
+    assert.match(capturedUrl, /\/dql\/verify/);
+    assert.equal(capturedHeaders["X-DQL-Account"], presented);
+    assert.equal(capturedHeaders["X-DQL-Key"], undefined);
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.equal(env.surface, "dql");
+    assert.match(env.objections.join(" "), /401/);
+    assert.match(env.objections.join(" "), /ACCOUNT_UNAUTHORIZED/);
+
+    const reflected = `${JSON.stringify(env)}\n${logs.join("\n")}`;
+    assert.equal(reflected.includes(presented), false);
+    assert.equal(reflected.includes("dqla_"), false);
+    assert.equal(reflected.includes("dqlk_"), false);
+  });
+
   it("maps HTTP 402 into execute:false with status text", async () => {
     const env = await verifyDecision(
       {
