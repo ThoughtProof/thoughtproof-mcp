@@ -1,4 +1,4 @@
-import { describe, it, before } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -13,6 +13,10 @@ describe("thoughtproof-mcp server", () => {
     });
     client = new Client({ name: "test-client", version: "1.0.0" });
     await client.connect(transport);
+  });
+
+  after(async () => {
+    await client?.close();
   });
 
   it("should expose verify_decision as the hero tool plus existing tools", async () => {
@@ -76,9 +80,10 @@ describe("thoughtproof-mcp server", () => {
     assert.match(envelope.objections.join(" "), /DQL key not configured/);
   });
 
-  it("verify_claim handles API errors gracefully", async () => {
+  it("verify_claim handles API errors gracefully", { timeout: 20_000 }, async () => {
     // Call with a claim — will likely get 402 or error since no real key
-    // The important thing is it doesn't crash
+    // The important thing is it doesn't crash. Bounded so CI does not hang
+    // on a live RV fetch.
     const result = await client.callTool({
       name: "verify_claim",
       arguments: { claim: "Test claim for CI" },
