@@ -50,18 +50,12 @@ export function resolveDqlCredential(env: DqlCredentialEnv = {}): DqlAuth | unde
   return undefined;
 }
 
-/** One credential header family only — never attach key + account together. */
+/** Exactly one credential header — never key + account, never a duplicate Bearer. */
 export function buildDqlAuthHeaders(auth: DqlAuth): Record<string, string> {
   if (auth.kind === "account") {
-    return {
-      [DQL_ACCOUNT_HEADER]: auth.value,
-      Authorization: `Bearer ${auth.value}`,
-    };
+    return { [DQL_ACCOUNT_HEADER]: auth.value };
   }
-  return {
-    [DQL_KEY_HEADER]: auth.value,
-    Authorization: `Bearer ${auth.value}`,
-  };
+  return { [DQL_KEY_HEADER]: auth.value };
 }
 
 export interface DqlRequest {
@@ -125,7 +119,7 @@ export async function callDql(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.3.0",
+    "User-Agent": "thoughtproof-mcp/0.3.1",
     ...buildDqlAuthHeaders(cfg.auth),
   };
 

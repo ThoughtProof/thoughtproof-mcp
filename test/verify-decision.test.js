@@ -215,8 +215,9 @@ describe("DQL credential resolution", () => {
     assert.deepEqual(fromAccountEnv, { kind: "account", value: "dqla_test" });
     const headers = buildDqlAuthHeaders(fromAccountEnv);
     assert.equal(headers["X-DQL-Account"], "dqla_test");
-    assert.equal(headers.Authorization, "Bearer dqla_test");
+    assert.equal(headers.Authorization, undefined);
     assert.equal(headers["X-DQL-Key"], undefined);
+    assert.deepEqual(Object.keys(headers), ["X-DQL-Account"]);
 
     const fromApiKeyEnv = resolveDqlCredential({
       DQL_API_KEY: "dqla_via_api_key",
@@ -232,8 +233,9 @@ describe("DQL credential resolution", () => {
     assert.deepEqual(auth, { kind: "key", value: "dqlk_test" });
     const headers = buildDqlAuthHeaders(auth);
     assert.equal(headers["X-DQL-Key"], "dqlk_test");
-    assert.equal(headers.Authorization, "Bearer dqlk_test");
+    assert.equal(headers.Authorization, undefined);
     assert.equal(headers["X-DQL-Account"], undefined);
+    assert.deepEqual(Object.keys(headers), ["X-DQL-Key"]);
   });
 
   it("prefers dqlk_ over dqla_ and never emits both headers", () => {
@@ -267,7 +269,7 @@ describe("callDql auth headers (mocked HTTP)", () => {
     });
     assert.equal(captured["X-DQL-Account"], "dqla_test");
     assert.equal(captured["X-DQL-Key"], undefined);
-    assert.equal(captured.Authorization, "Bearer dqla_test");
+    assert.equal(captured.Authorization, undefined);
   });
 
   it("sends X-DQL-Key when auth is dqlk_", async () => {
@@ -281,7 +283,7 @@ describe("callDql auth headers (mocked HTTP)", () => {
     });
     assert.equal(captured["X-DQL-Key"], "dqlk_test");
     assert.equal(captured["X-DQL-Account"], undefined);
-    assert.equal(captured.Authorization, "Bearer dqlk_test");
+    assert.equal(captured.Authorization, undefined);
   });
 });
 
@@ -402,6 +404,7 @@ describe("verifyDecision fail-closed (mocked HTTP)", () => {
     );
     assert.equal(captured["X-DQL-Key"], "dqlk_test");
     assert.equal(captured["X-DQL-Account"], undefined);
+    assert.equal(captured.Authorization, undefined);
     assert.equal(
       Object.values(captured).some((v) => String(v).includes("dqla_")),
       false
@@ -434,6 +437,7 @@ describe("verifyDecision fail-closed (mocked HTTP)", () => {
     );
     assert.equal(captured["X-DQL-Account"], "dqla_via_key_env");
     assert.equal(captured["X-DQL-Key"], undefined);
+    assert.equal(captured.Authorization, undefined);
     assert.equal(env.execute, true);
   });
 
@@ -463,6 +467,7 @@ describe("verifyDecision fail-closed (mocked HTTP)", () => {
     );
     assert.equal(captured["X-DQL-Account"], "dqla_test");
     assert.equal(captured["X-DQL-Key"], undefined);
+    assert.equal(captured.Authorization, undefined);
     assert.equal(env.execute, true);
     assert.equal(env.verdict, "ALLOW");
   });

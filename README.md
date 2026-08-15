@@ -8,11 +8,13 @@ MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decisio
 
 **Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`.
 
-Published on npm as [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) (`latest`).
+npm `latest` is still [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) (verify-key path only). This branch is **0.3.1** and is **not published**. Do not use 0.3.0 as the `dqla_` path.
 
 ## Quick Start
 
-Grok (and any MCP host) can use the account token `dqla_…` from `GET /dql/account` after checkout. You do **not** need to paste the raw verify key `dqlk_…`.
+Grok (and any MCP host) can use the account token `dqla_…` shown **once** on checkout reveal. Hold that same token for `GET /dql/account` — the account route uses it; it does not issue a new one. You do **not** need to paste the raw verify key `dqlk_…`.
+
+The `dqla_` path needs a DQL deploy that accepts `X-DQL-Account` on `POST /dql/verify`. Do not publish this MCP package until DQL #40 (credit-after-success) is fixed, merged, deployed, and live-tested.
 
 ```json
 {
@@ -30,7 +32,7 @@ Grok (and any MCP host) can use the account token `dqla_…` from `GET /dql/acco
 
 `DQL_API_KEY` (alias `THOUGHTPROOF_DQL_KEY`) still works: set it to `dqlk_…` for the raw verify key, or to `dqla_…` for the same account-token path. If both a `dqlk_` key and a `dqla_` token are set, only the key is sent.
 
-Install with `npx thoughtproof-mcp` or pin the release with `npx thoughtproof-mcp@0.3.0`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, **Grok**, and any MCP-compatible client.
+For the published verify-key release, `npx thoughtproof-mcp` / `npx thoughtproof-mcp@0.3.0`. The `dqla_` path is **0.3.1** on this branch (`npm run build`, then point the host at `dist/index.js`). Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, **Grok**, and any MCP-compatible client.
 
 ## Tools
 
@@ -94,7 +96,7 @@ Optional pre-execution gate for trading agents (Sentinel → RV). Not the defaul
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `DQL_ACCOUNT_TOKEN` | *(none)* | Account token (`dqla_…`) from `/dql/account` after checkout. Preferred Grok path — no raw `dqlk_` paste. Sent as `X-DQL-Account`. |
+| `DQL_ACCOUNT_TOKEN` | *(none)* | Account token (`dqla_…`) from checkout reveal (shown once). Hold it for `GET /dql/account`; that route uses the token, it does not mint one. Preferred Grok path — no raw `dqlk_` paste. Sent as `X-DQL-Account` only. Requires DQL that accepts `X-DQL-Account` on `/dql/verify`. |
 | `DQL_API_KEY` | *(none)* | DQL verify key (`dqlk_…`) or account token (`dqla_…`) for `verify_decision`. Alias: `THOUGHTPROOF_DQL_KEY`. A `dqlk_` value wins over `dqla_` so both are never sent. |
 | `SENTINEL_API_KEY` | *(none)* | Optional. Required only when `mode=sentinel` or auto-route picks Sentinel. Fallback: `THOUGHTPROOF_API_KEY` as `X-Sentinel-Key` |
 | `DQL_SANDBOX` | *(off)* | Set to `1` to send `sandbox: true` on DQL calls (local/dev only) |

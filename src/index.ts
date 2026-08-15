@@ -35,7 +35,7 @@ const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
 async function apiCall(path: string, body?: Record<string, unknown>): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.3.0",
+    "User-Agent": "thoughtproof-mcp/0.3.1",
   };
   if (API_KEY) {
     headers["X-Operator-Key"] = API_KEY;
@@ -96,7 +96,7 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
 
 const server = new McpServer({
   name: "thoughtproof",
-  version: "0.3.0",
+  version: "0.3.1",
 });
 
 // Hero tool: verify_decision — DQL (default/spend) or Sentinel (irreversible exit).

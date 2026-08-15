@@ -2,11 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [Unreleased] / 0.3.1
+
+Not published. **0.3.0** on npm is not the `dqla_` path.
 
 ### Added
-- `verify_decision` accepts a DQL account token (`dqla_…`) via `DQL_ACCOUNT_TOKEN` or the same env as the verify key when the value starts with `dqla_`. Sent as `X-DQL-Account` (never together with `X-DQL-Key`).
-- Grok / MCP hosts can use the post-checkout account token from `/dql/account` instead of pasting a raw `dqlk_` verify key.
+- `verify_decision` accepts a DQL account token (`dqla_…`) via `DQL_ACCOUNT_TOKEN` or the same env as the verify key when the value starts with `dqla_`. Sent as `X-DQL-Account` only (never together with `X-DQL-Key` or `Authorization`).
+- Grok / MCP hosts can use the `dqla_…` token shown once on checkout reveal (hold the same token for `GET /dql/account`; that route does not issue it) instead of pasting a raw `dqlk_` verify key.
+- The `dqla_` path requires DQL that accepts `X-DQL-Account` on `POST /dql/verify`. Do not publish until DQL #40 (credit-after-success) is fixed, merged, deployed, and live-tested.
+
+### Changed
+- DQL auth sends exactly one credential header: `X-DQL-Account` for `dqla_`, `X-DQL-Key` for `dqlk_`.
 
 ### Unchanged
 - `dqlk_` via `DQL_API_KEY` / `THOUGHTPROOF_DQL_KEY` still sends `X-DQL-Key`.
