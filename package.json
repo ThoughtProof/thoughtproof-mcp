@@ -1,7 +1,7 @@
 {
   "name": "thoughtproof-mcp",
-  "version": "0.2.1",
-  "description": "MCP server for ThoughtProof — verify AI reasoning with adversarial multi-model consensus",
+  "version": "0.3.0",
+  "description": "MCP server for ThoughtProof \u2014 verify AI reasoning with adversarial multi-model consensus",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -50,5 +50,8 @@
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   },
-  "files": ["dist", "CHANGELOG.md"]
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ]
 }

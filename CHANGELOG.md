@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- **Hero tool `verify_decision`:** mandate + proposed_action + reasoning → DQL or Sentinel (internal route).
+- `execute: true` only on native ALLOW; fail-closed on missing key / 4xx / 5xx / timeout.
+- Default timeouts: DQL 60s, Sentinel 90s.
+- `verify_claim` / `check_agent_score` unchanged.
+
+
 ## Unreleased
 
 - verify_decision: raise default timeouts (DQL 60s, Sentinel 90s) for live p95 headroom.
