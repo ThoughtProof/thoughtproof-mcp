@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- `verify_decision` accepts a DQL account token (`dqla_…`) via `DQL_ACCOUNT_TOKEN` or the same env as the verify key when the value starts with `dqla_`. Sent as `X-DQL-Account` (never together with `X-DQL-Key`).
+- Grok / MCP hosts can use the post-checkout account token from `/dql/account` instead of pasting a raw `dqlk_` verify key.
+
+### Unchanged
+- `dqlk_` via `DQL_API_KEY` / `THOUGHTPROOF_DQL_KEY` still sends `X-DQL-Key`.
+- `execute: true` only on native ALLOW. Missing credentials still fail closed.
+
 ## [0.3.0] - 2026-08-15
 
 Published to npm as [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) (`latest`).

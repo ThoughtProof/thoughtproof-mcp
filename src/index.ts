@@ -23,6 +23,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { resolveDqlCredential } from "./dql-client.js";
 import { verifyTrade, PaymentRequiredError } from "./verify-client.js";
 import { verifyDecision } from "./verify-decision.js";
 
@@ -136,7 +137,7 @@ server.tool(
     const envelope = await verifyDecision(
       { mandate, proposed_action, reasoning, context, mode },
       {
-        dqlApiKey: process.env.DQL_API_KEY || process.env.THOUGHTPROOF_DQL_KEY,
+        dqlAuth: resolveDqlCredential(process.env),
         sentinelApiKey: process.env.SENTINEL_API_KEY || process.env.THOUGHTPROOF_API_KEY,
         sandbox: process.env.DQL_SANDBOX === "1",
       }
