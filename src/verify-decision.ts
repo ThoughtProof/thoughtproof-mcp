@@ -6,7 +6,13 @@
  * execute is true ONLY on native ALLOW; the host is not hard-stopped.
  */
 
-import { callDql, type DqlAxisResult, type DqlResponse } from "./dql-client.js";
+import {
+  callDql,
+  resolveDqlCredential,
+  type DqlAuth,
+  type DqlAxisResult,
+  type DqlResponse,
+} from "./dql-client.js";
 import {
   callSentinelDecision,
   type SentinelResponse,
@@ -39,12 +45,22 @@ export interface DecisionEnvelope {
 
 export interface VerifyDecisionConfig {
   dqlApiKey?: string;
+  dqlAccountToken?: string;
+  dqlAuth?: DqlAuth;
   sentinelApiKey?: string;
   dqlUrl?: string;
   sentinelUrl?: string;
   timeoutMs?: number;
   sandbox?: boolean;
   fetchImpl?: typeof fetch;
+}
+
+export function resolveVerifyDqlAuth(cfg: VerifyDecisionConfig): DqlAuth | undefined {
+  if (cfg.dqlAuth) return cfg.dqlAuth;
+  return resolveDqlCredential({
+    DQL_API_KEY: cfg.dqlApiKey,
+    DQL_ACCOUNT_TOKEN: cfg.dqlAccountToken,
+  });
 }
 
 export function executeAllowed(verdict: string): boolean {
@@ -131,15 +147,15 @@ export async function verifyDecision(
 
   try {
     if (surface === "dql") {
-      const apiKey = cfg.dqlApiKey?.trim();
-      if (!apiKey) {
+      const auth = resolveVerifyDqlAuth(cfg);
+      if (!auth) {
         return errorEnvelope(
           "dql",
-          "DQL key not configured (set DQL_API_KEY or THOUGHTPROOF_DQL_KEY)",
+          "DQL key not configured (set DQL_API_KEY, THOUGHTPROOF_DQL_KEY, or DQL_ACCOUNT_TOKEN)",
         );
       }
       const result = await callDql(input, {
-        apiKey,
+        auth,
         url: cfg.dqlUrl,
         timeoutMs: cfg.timeoutMs,
         sandbox: cfg.sandbox === true,

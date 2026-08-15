@@ -23,6 +23,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { resolveDqlCredential } from "./dql-client.js";
 import { verifyTrade, PaymentRequiredError } from "./verify-client.js";
 import { verifyDecision } from "./verify-decision.js";
 
@@ -34,7 +35,7 @@ const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
 async function apiCall(path: string, body?: Record<string, unknown>): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.3.0",
+    "User-Agent": "thoughtproof-mcp/0.3.1",
   };
   if (API_KEY) {
     headers["X-Operator-Key"] = API_KEY;
@@ -95,7 +96,7 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
 
 const server = new McpServer({
   name: "thoughtproof",
-  version: "0.3.0",
+  version: "0.3.1",
 });
 
 // Hero tool: verify_decision — DQL (default/spend) or Sentinel (irreversible exit).
@@ -136,7 +137,7 @@ server.tool(
     const envelope = await verifyDecision(
       { mandate, proposed_action, reasoning, context, mode },
       {
-        dqlApiKey: process.env.DQL_API_KEY || process.env.THOUGHTPROOF_DQL_KEY,
+        dqlAuth: resolveDqlCredential(process.env),
         sentinelApiKey: process.env.SENTINEL_API_KEY || process.env.THOUGHTPROOF_API_KEY,
         sandbox: process.env.DQL_SANDBOX === "1",
       }

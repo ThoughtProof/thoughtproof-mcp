@@ -2,6 +2,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { routeDecision } from "../dist/route-decision.js";
 import {
+  buildDqlAuthHeaders,
+  callDql,
+  resolveDqlCredential,
+} from "../dist/dql-client.js";
+import {
   executeAllowed,
   mapDqlEnvelope,
   mapSentinelEnvelope,
@@ -202,6 +207,86 @@ describe("envelope mapping", () => {
   });
 });
 
+describe("DQL credential resolution", () => {
+  it("env dqla_ resolves to the account header only", () => {
+    const fromAccountEnv = resolveDqlCredential({
+      DQL_ACCOUNT_TOKEN: "dqla_test",
+    });
+    assert.deepEqual(fromAccountEnv, { kind: "account", value: "dqla_test" });
+    const headers = buildDqlAuthHeaders(fromAccountEnv);
+    assert.equal(headers["X-DQL-Account"], "dqla_test");
+    assert.equal(headers.Authorization, undefined);
+    assert.equal(headers["X-DQL-Key"], undefined);
+    assert.deepEqual(Object.keys(headers), ["X-DQL-Account"]);
+
+    const fromApiKeyEnv = resolveDqlCredential({
+      DQL_API_KEY: "dqla_via_api_key",
+    });
+    assert.deepEqual(fromApiKeyEnv, { kind: "account", value: "dqla_via_api_key" });
+    assert.equal(buildDqlAuthHeaders(fromApiKeyEnv)["X-DQL-Key"], undefined);
+  });
+
+  it("env dqlk_ resolves to the existing key header only", () => {
+    const auth = resolveDqlCredential({
+      DQL_API_KEY: "dqlk_test",
+    });
+    assert.deepEqual(auth, { kind: "key", value: "dqlk_test" });
+    const headers = buildDqlAuthHeaders(auth);
+    assert.equal(headers["X-DQL-Key"], "dqlk_test");
+    assert.equal(headers.Authorization, undefined);
+    assert.equal(headers["X-DQL-Account"], undefined);
+    assert.deepEqual(Object.keys(headers), ["X-DQL-Key"]);
+  });
+
+  it("prefers dqlk_ over dqla_ and never emits both headers", () => {
+    const auth = resolveDqlCredential({
+      DQL_API_KEY: "dqlk_test",
+      DQL_ACCOUNT_TOKEN: "dqla_test",
+    });
+    assert.equal(auth.kind, "key");
+    const headers = buildDqlAuthHeaders(auth);
+    assert.equal(headers["X-DQL-Key"], "dqlk_test");
+    assert.equal(headers["X-DQL-Account"], undefined);
+    assert.equal(Object.values(headers).some((v) => String(v).startsWith("dqla_")), false);
+  });
+});
+
+describe("callDql auth headers (mocked HTTP)", () => {
+  const input = {
+    mandate: "Buy milk under $5",
+    proposed_action: "Purchase milk for $4",
+    reasoning: "Under budget",
+  };
+
+  it("sends X-DQL-Account when auth is dqla_", async () => {
+    let captured;
+    await callDql(input, {
+      auth: { kind: "account", value: "dqla_test" },
+      fetchImpl: async (_url, init) => {
+        captured = init.headers;
+        return new Response(JSON.stringify({ error: "noop" }), { status: 401 });
+      },
+    });
+    assert.equal(captured["X-DQL-Account"], "dqla_test");
+    assert.equal(captured["X-DQL-Key"], undefined);
+    assert.equal(captured.Authorization, undefined);
+  });
+
+  it("sends X-DQL-Key when auth is dqlk_", async () => {
+    let captured;
+    await callDql(input, {
+      auth: { kind: "key", value: "dqlk_test" },
+      fetchImpl: async (_url, init) => {
+        captured = init.headers;
+        return new Response(JSON.stringify({ error: "noop" }), { status: 401 });
+      },
+    });
+    assert.equal(captured["X-DQL-Key"], "dqlk_test");
+    assert.equal(captured["X-DQL-Account"], undefined);
+    assert.equal(captured.Authorization, undefined);
+  });
+});
+
 describe("verifyDecision fail-closed (mocked HTTP)", () => {
   it("does not hit the network when the DQL key is missing", async () => {
     let called = 0;
@@ -246,6 +331,70 @@ describe("verifyDecision fail-closed (mocked HTTP)", () => {
     assert.equal(env.execute, false);
     assert.equal(env.surface, "sentinel");
     assert.match(env.objections.join(" "), /Sentinel key not configured/);
+  });
+
+  it("maps DQL 401 ACCOUNT_UNAUTHORIZED to execute:false with one request and no token leak", async () => {
+    const presented = "dqla_unauth_probe_7k2m";
+    let called = 0;
+    let capturedUrl = "";
+    let capturedHeaders;
+    const logs = [];
+    const origLog = console.log;
+    const origErr = console.error;
+    const origWarn = console.warn;
+    const capture = (...args) => {
+      logs.push(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "));
+    };
+    console.log = capture;
+    console.error = capture;
+    console.warn = capture;
+
+    let env;
+    try {
+      env = await verifyDecision(
+        {
+          mandate: "Buy milk under $5",
+          proposed_action: "Purchase milk for $4",
+          reasoning: "Under budget",
+          mode: "dql",
+        },
+        {
+          dqlAccountToken: presented,
+          sentinelApiKey: "sentinel_must_not_be_used",
+          fetchImpl: async (url, init) => {
+            called += 1;
+            capturedUrl = String(url);
+            capturedHeaders = init.headers;
+            return new Response(
+              JSON.stringify({
+                error: "Valid account token required.",
+                code: "ACCOUNT_UNAUTHORIZED",
+              }),
+              { status: 401, statusText: "Unauthorized" }
+            );
+          },
+        }
+      );
+    } finally {
+      console.log = origLog;
+      console.error = origErr;
+      console.warn = origWarn;
+    }
+
+    assert.equal(called, 1);
+    assert.match(capturedUrl, /\/dql\/verify/);
+    assert.equal(capturedHeaders["X-DQL-Account"], presented);
+    assert.equal(capturedHeaders["X-DQL-Key"], undefined);
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.equal(env.surface, "dql");
+    assert.match(env.objections.join(" "), /401/);
+    assert.match(env.objections.join(" "), /ACCOUNT_UNAUTHORIZED/);
+
+    const reflected = `${JSON.stringify(env)}\n${logs.join("\n")}`;
+    assert.equal(reflected.includes(presented), false);
+    assert.equal(reflected.includes("dqla_"), false);
+    assert.equal(reflected.includes("dqlk_"), false);
   });
 
   it("maps HTTP 402 into execute:false with status text", async () => {
@@ -297,5 +446,93 @@ describe("verifyDecision fail-closed (mocked HTTP)", () => {
     assert.equal(env.execute, true);
     assert.equal(env.receipt_id, "dql_ok");
     assert.equal(env.surface, "dql");
+  });
+
+  it("does not send the account token when a dqlk_ key is also set", async () => {
+    let captured;
+    await verifyDecision(
+      {
+        mandate: "Buy milk under $5",
+        proposed_action: "Purchase milk for $4",
+        reasoning: "Under budget",
+        mode: "dql",
+      },
+      {
+        dqlApiKey: "dqlk_test",
+        dqlAccountToken: "dqla_test",
+        fetchImpl: async (_url, init) => {
+          captured = init.headers;
+          return new Response(JSON.stringify({ error: "noop" }), { status: 401 });
+        },
+      }
+    );
+    assert.equal(captured["X-DQL-Key"], "dqlk_test");
+    assert.equal(captured["X-DQL-Account"], undefined);
+    assert.equal(captured.Authorization, undefined);
+    assert.equal(
+      Object.values(captured).some((v) => String(v).includes("dqla_")),
+      false
+    );
+  });
+
+  it("treats DQL_API_KEY=dqla_ as an account token", async () => {
+    let captured;
+    const env = await verifyDecision(
+      {
+        mandate: "Buy milk under $5",
+        proposed_action: "Purchase milk for $4",
+        reasoning: "Under budget",
+        mode: "dql",
+      },
+      {
+        dqlApiKey: "dqla_via_key_env",
+        fetchImpl: async (_url, init) => {
+          captured = init.headers;
+          return new Response(
+            JSON.stringify({
+              id: "dql_ok",
+              axes: [{ axis: "intent", verdict: "PASS", objection: "" }],
+              aggregate: { verdict: "ALLOW" },
+            }),
+            { status: 200 }
+          );
+        },
+      }
+    );
+    assert.equal(captured["X-DQL-Account"], "dqla_via_key_env");
+    assert.equal(captured["X-DQL-Key"], undefined);
+    assert.equal(captured.Authorization, undefined);
+    assert.equal(env.execute, true);
+  });
+
+  it("uses an account token when no dqlk_ is set", async () => {
+    let captured;
+    const env = await verifyDecision(
+      {
+        mandate: "Buy milk under $5",
+        proposed_action: "Purchase milk for $4",
+        reasoning: "Under budget",
+        mode: "dql",
+      },
+      {
+        dqlAccountToken: "dqla_test",
+        fetchImpl: async (_url, init) => {
+          captured = init.headers;
+          return new Response(
+            JSON.stringify({
+              id: "dql_ok",
+              axes: [{ axis: "intent", verdict: "PASS", objection: "" }],
+              aggregate: { verdict: "ALLOW", rationale: "All axes passed." },
+            }),
+            { status: 200 }
+          );
+        },
+      }
+    );
+    assert.equal(captured["X-DQL-Account"], "dqla_test");
+    assert.equal(captured["X-DQL-Key"], undefined);
+    assert.equal(captured.Authorization, undefined);
+    assert.equal(env.execute, true);
+    assert.equal(env.verdict, "ALLOW");
   });
 });

@@ -65,7 +65,7 @@ export async function callSentinelDecision(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.3.0",
+    "User-Agent": "thoughtproof-mcp/0.3.1",
     "X-Sentinel-Key": cfg.apiKey,
   };
 
