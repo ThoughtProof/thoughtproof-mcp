@@ -6,7 +6,10 @@
  * 3–4 LLMs evaluate independently → 1 red-team critic → 1 synthesizer.
  *
  * Tools:
- *   - verify_claim: Verify any claim or AI-generated reasoning
+ *   - verify_decision: Hero pre-execution gate. Routes internally to DQL
+ *                      (spend/checkout) or Sentinel (irreversible exit).
+ *                      Soft fail-closed: execute is true ONLY on ALLOW.
+ *   - verify_claim: Verify any claim or AI-generated reasoning (RV /v1/check)
  *   - check_agent_score: Get an agent's trust score
  *   - verify_trade: Pre-execution gate for autonomous trading/action agents.
  *                   Full Sentinel → RV pipeline (powered by SERV Reasoning).
@@ -21,6 +24,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { verifyTrade, PaymentRequiredError } from "./verify-client.js";
+import { verifyDecision } from "./verify-decision.js";
 
 const API_BASE = process.env.THOUGHTPROOF_BASE_URL || "https://api.thoughtproof.ai";
 const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
@@ -94,7 +98,56 @@ const server = new McpServer({
   version: "0.2.1",
 });
 
-// Tool 1: verify_claim
+// Hero tool: verify_decision — DQL (default/spend) or Sentinel (irreversible exit).
+// Does not call RV/PLV. Camera mandate: the agent must NOT put the overshoot
+// in proposed_action or reasoning; the verifier has to find the mismatch.
+server.tool(
+  "verify_decision",
+  "Pre-execution gate for a proposed agent action (hero tool). Routes internally to DQL or Sentinel and returns { verdict, execute, objections, receipt_id, surface, axes?, recommendation }. execute is true ONLY on ALLOW — on any other result treat this as do-not-execute (soft fail-closed; this tool does not hard-stop the host). Camera mandate: you must NOT put the overshoot or constraint violation in proposed_action or reasoning (for example, do not write \"price is above the cap\"). State the user's goal in mandate, the action you are about to take in proposed_action, and your own plan in reasoning. The verifier has to find the mismatch. Replan is a new call with a new receipt.",
+  {
+    mandate: z
+      .string()
+      .min(1)
+      .describe("The user's stated goal or instruction the agent is acting on."),
+    proposed_action: z
+      .string()
+      .min(1)
+      .describe(
+        "What the agent is about to do. Do not include the overshoot or constraint violation here (e.g. do not write \"price is above the cap\")."
+      ),
+    reasoning: z
+      .string()
+      .min(1)
+      .describe(
+        "The agent's own plan or reasoning. Do not include the overshoot or constraint violation here; the verifier has to find the mismatch."
+      ),
+    context: z
+      .string()
+      .optional()
+      .describe("Optional extra evidence, tool outputs, or prior turns."),
+    mode: z
+      .enum(["dql", "sentinel", "auto"])
+      .optional()
+      .describe(
+        "Routing override. auto (default) picks DQL for spend/checkout language and Sentinel for high-blast irreversible exits; unsure → DQL. Explicit mode wins. RV/PLV are not available."
+      ),
+  },
+  async ({ mandate, proposed_action, reasoning, context, mode }) => {
+    const envelope = await verifyDecision(
+      { mandate, proposed_action, reasoning, context, mode },
+      {
+        dqlApiKey: process.env.DQL_API_KEY || process.env.THOUGHTPROOF_DQL_KEY,
+        sentinelApiKey: process.env.SENTINEL_API_KEY || process.env.THOUGHTPROOF_API_KEY,
+        sandbox: process.env.DQL_SANDBOX === "1",
+      }
+    );
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(envelope, null, 2) }],
+    };
+  }
+);
+
+// Tool: verify_claim (RV /v1/check) — unchanged.
 server.tool(
   "verify_claim",
   {

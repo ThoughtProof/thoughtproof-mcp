@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- `verify_decision` hero tool — routes internally to DQL (`POST /dql/verify`) or Sentinel (`POST /sentinel/verify` with `mode=action_authorization`). Soft fail-closed `execute` flag (`true` only on `ALLOW`). Not published to npm.
+
 ## [0.2.1] - 2026-05-26
 
 ### Fixed
