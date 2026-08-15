@@ -6,7 +6,7 @@
  */
 
 export const DQL_VERIFY_URL = "https://dql.thoughtproof.ai/dql/verify";
-export const DEFAULT_TIMEOUT_MS = 30_000;
+export const DEFAULT_TIMEOUT_MS = 60_000;
 
 export interface DqlRequest {
   mandate: string;

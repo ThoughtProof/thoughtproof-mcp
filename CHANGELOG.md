@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- verify_decision: raise default timeouts (DQL 60s, Sentinel 90s) for live p95 headroom.
+
+
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]

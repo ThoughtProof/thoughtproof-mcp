@@ -6,7 +6,7 @@
  */
 
 export const SENTINEL_VERIFY_URL = "https://sentinel.thoughtproof.ai/sentinel/verify";
-export const DEFAULT_TIMEOUT_MS = 30_000;
+export const DEFAULT_TIMEOUT_MS = 90_000;
 
 export interface SentinelDecisionInput {
   mandate: string;
