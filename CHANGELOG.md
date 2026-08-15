@@ -1,24 +1,18 @@
 # Changelog
 
-## 0.3.0
-
-- **Hero tool `verify_decision`:** mandate + proposed_action + reasoning → DQL or Sentinel (internal route).
-- `execute: true` only on native ALLOW; fail-closed on missing key / 4xx / 5xx / timeout.
-- Default timeouts: DQL 60s, Sentinel 90s.
-- `verify_claim` / `check_agent_score` unchanged.
-
-
-## Unreleased
-
-- verify_decision: raise default timeouts (DQL 60s, Sentinel 90s) for live p95 headroom.
-
-
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.0] - 2026-08-15
+
+Published to npm as [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) (`latest`).
 
 ### Added
-- `verify_decision` hero tool — routes internally to DQL (`POST /dql/verify`) or Sentinel (`POST /sentinel/verify` with `mode=action_authorization`). Soft fail-closed `execute` flag (`true` only on `ALLOW`). Not published to npm.
+- Hero tool `verify_decision` — mandate + proposed_action + reasoning routes internally to DQL (`POST /dql/verify`) or Sentinel (`POST /sentinel/verify` with `mode=action_authorization`). Soft fail-closed `execute` flag (`true` only on native `ALLOW`).
+- `execute: true` only on native ALLOW; fail-closed on missing key / 4xx / 5xx / timeout.
+- Default timeouts raised for live p95 headroom: DQL 60s, Sentinel 90s.
+
+### Unchanged
+- `verify_claim` / `check_agent_score`
 
 ## [0.2.1] - 2026-05-26
 

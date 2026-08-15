@@ -6,7 +6,9 @@
 
 MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decision verification for AI agents.
 
-**Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`. This change is **not published to npm**; run from this repo / branch.
+**Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`.
+
+Published on npm as [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) (`latest`).
 
 ## Quick Start
 
@@ -14,8 +16,8 @@ MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decisio
 {
   "mcpServers": {
     "thoughtproof": {
-      "command": "node",
-      "args": ["dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "thoughtproof-mcp"],
       "env": {
         "DQL_API_KEY": "dqlk_your_key_here"
       }
@@ -24,7 +26,7 @@ MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decisio
 }
 ```
 
-Build first (`npm install && npm run build`). Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and any MCP-compatible client.
+Install with `npx thoughtproof-mcp` or pin the release with `npx thoughtproof-mcp@0.3.0`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and any MCP-compatible client.
 
 ## Tools
 
@@ -108,7 +110,7 @@ npm run dev          # Run with tsx (hot reload)
 npm run inspect      # Test with MCP Inspector
 ```
 
-This branch is not an npm release. Do not `npm publish` from it.
+For local MCP clients, point `command` at `node` and `args` at `dist/index.js` after `npm run build`.
 
 ## Related
 
