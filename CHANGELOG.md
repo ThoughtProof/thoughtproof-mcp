@@ -11,9 +11,14 @@ Not published. This tree is unpublished **0.4.0-dev** and is the `dqla_` path. *
 - Desktop / CLI stdio hosts can use the `dqla_…` token shown once on checkout reveal (hold the same token for `GET /dql/account`; that route does not issue it) instead of pasting a raw `dqlk_` verify key. Remote MCP is out of scope.
 - The `dqla_` path requires DQL that accepts `X-DQL-Account` on `POST /dql/verify`. Do not publish until DQL #40 (credit-after-success) is fixed, merged, deployed, and live-tested.
 - Fail-closed on DQL `401 ACCOUNT_UNAUTHORIZED`: `execute: false`, exactly one HTTP request, no token echo.
+- `mcpName` in package.json (`io.github.ThoughtProof/thoughtproof-mcp`) so a later 0.4.0 release keeps Official Registry ownership.
+- `server.json` Official Registry manifest pointing at published npm `thoughtproof-mcp@0.3.1` (not this unpublished tree).
 
 ### Changed
 - DQL auth sends exactly one credential header: `X-DQL-Account` for `dqla_`, `X-DQL-Key` for `dqlk_`.
+- package.json description aligned to verify_decision hero positioning.
+- glama.json description aligned to verify_decision (stdio, DQL spend / Sentinel irreversible, execute only on ALLOW).
+- README is the scrape-safe published listing surface; unpublished path lives in UNRELEASED.md.
 
 ### Unchanged
 - `dqlk_` via `DQL_API_KEY` / `THOUGHTPROOF_DQL_KEY` still sends `X-DQL-Key`.

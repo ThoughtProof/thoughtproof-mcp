@@ -4,19 +4,19 @@
 [![CI](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+thoughtproof-mcp — local stdio. Hero tool `verify_decision` (DQL spend / Sentinel irreversible exit). `execute` is `true` only on ALLOW.
+
 MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decision verification for AI agents.
 
 **Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`.
 
-This package is a **local stdio** MCP server (Node 18+) for Desktop / CLI hosts such as Cursor and Claude Desktop. It is not a publicly reachable remote MCP server. Remote MCP (including Grok Web/Mobile custom connectors) is out of scope and not shipped.
+This package is a **local stdio** MCP server (Node 18+) for Desktop / CLI hosts such as Cursor, Claude Desktop, Windsurf, and Cline. It is **not** a remote HTTP MCP server. It is **not** a Grok Web/Mobile custom connector.
 
-npm `latest` is still [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) until `0.3.1` is published. Pin the published package as `thoughtproof-mcp@0.3.1` (metadata-only listing release; same runtime as `0.3.0`, verify-key path only). This branch is **unpublished 0.4.0-dev** and is the `dqla_` path — not the npm pin. See [UNRELEASED.md](./UNRELEASED.md).
+Get keys at [https://app.thoughtproof.ai/pricing](https://app.thoughtproof.ai/pricing).
+
+Unpublished work is documented in [UNRELEASED.md](./UNRELEASED.md).
 
 ## Quick Start
-
-### Published install (`thoughtproof-mcp@0.3.1`)
-
-`0.3.1` is the metadata-only npm release (same runtime as `0.3.0`) and is the pin once published. Until Raul publishes `0.3.1`, npm `latest` remains `0.3.0`.
 
 ```json
 {
@@ -25,40 +25,14 @@ npm `latest` is still [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/t
       "command": "npx",
       "args": ["-y", "thoughtproof-mcp@0.3.1"],
       "env": {
-        "DQL_API_KEY": "dqlk_your_verify_key"
+        "DQL_API_KEY": "dqlk_your_key_here"
       }
     }
   }
 }
 ```
 
-Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
-
-### Unpublished 0.4.0-dev (`dqla_` path)
-
-This branch is **not published** and is **not** the npm pin. It adds `dqla_` / `DQL_ACCOUNT_TOKEN` (`X-DQL-Account`). Do not treat `0.3.0` or `0.3.1` as the `dqla_` path.
-
-Desktop / CLI hosts can use the account token `dqla_…` shown **once** on checkout reveal. Hold that same token for `GET /dql/account` — the account route uses it; it does not issue a new one. You do **not** need to paste the raw verify key `dqlk_…`.
-
-The `dqla_` path needs a DQL deploy that accepts `X-DQL-Account` on `POST /dql/verify`. Do not publish this MCP package until DQL #40 (credit-after-success) is fixed, merged, deployed, and live-tested.
-
-```json
-{
-  "mcpServers": {
-    "thoughtproof": {
-      "command": "node",
-      "args": ["/absolute/path/to/thoughtproof-mcp/dist/index.js"],
-      "env": {
-        "DQL_ACCOUNT_TOKEN": "dqla_your_account_token"
-      }
-    }
-  }
-}
-```
-
-`DQL_API_KEY` (alias `THOUGHTPROOF_DQL_KEY`) still works: set it to `dqlk_…` for the raw verify key, or to `dqla_…` for the same account-token path. If both a `dqlk_` key and a `dqla_` token are set, only the key is sent.
-
-Build locally (`npm run build`, then point the host at `dist/index.js`). Do not `npx thoughtproof-mcp@0.3.1` for `dqla_`.
+Install with `npx -y thoughtproof-mcp@0.3.1`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
 
 ## Tools
 
@@ -122,8 +96,7 @@ Optional pre-execution gate for trading agents (Sentinel → RV). Not the defaul
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `DQL_ACCOUNT_TOKEN` | *(none)* | Account token (`dqla_…`) from checkout reveal (shown once). Hold it for `GET /dql/account`; that route uses the token, it does not mint one. No raw `dqlk_` paste. Sent as `X-DQL-Account` only. Requires DQL that accepts `X-DQL-Account` on `/dql/verify`. |
-| `DQL_API_KEY` | *(none)* | DQL verify key (`dqlk_…`) or account token (`dqla_…`) for `verify_decision`. Alias: `THOUGHTPROOF_DQL_KEY`. A `dqlk_` value wins over `dqla_` so both are never sent. |
+| `DQL_API_KEY` | *(none)* | DQL key (`dqlk_…`) for the default `verify_decision` path. Alias: `THOUGHTPROOF_DQL_KEY` |
 | `SENTINEL_API_KEY` | *(none)* | Optional. Required only when `mode=sentinel` or auto-route picks Sentinel. Fallback: `THOUGHTPROOF_API_KEY` as `X-Sentinel-Key` |
 | `DQL_SANDBOX` | *(off)* | Set to `1` to send `sandbox: true` on DQL calls (local/dev only) |
 | `THOUGHTPROOF_API_KEY` | *(none)* | Operator key for `verify_claim` / `verify_trade` / Sentinel fallback |
