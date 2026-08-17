@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-08-17
+
+Metadata-only listing release. No runtime change vs 0.3.0.
+
+### Added
+- `mcpName` in package.json (`io.github.ThoughtProof/thoughtproof-mcp`) so Official MCP Registry ownership can match `server.json.name`
+- `server.json` Official MCP Registry manifest (npm package, stdio, version 0.3.1)
+- README install card pinned to `npx -y thoughtproof-mcp@0.3.1`
+
+### Changed
+- package.json description aligned to verify_decision hero positioning
+- glama.json description aligned to verify_decision (stdio, DQL spend / Sentinel irreversible, execute only on ALLOW)
+
 ## [0.3.0] - 2026-08-15
 
 Published to npm as [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) (`latest`).

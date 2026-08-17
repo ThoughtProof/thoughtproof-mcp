@@ -1,7 +1,8 @@
 {
   "name": "thoughtproof-mcp",
-  "version": "0.3.0",
-  "description": "MCP server for ThoughtProof \u2014 verify AI reasoning with adversarial multi-model consensus",
+  "version": "0.3.1",
+  "mcpName": "io.github.ThoughtProof/thoughtproof-mcp",
+  "description": "Local MCP server for pre-execution decision verification. DQL for spend, Sentinel for irreversible actions; execute only on ALLOW.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -52,6 +53,7 @@
   },
   "files": [
     "dist",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "server.json"
   ]
 }

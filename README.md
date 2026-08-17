@@ -4,11 +4,15 @@
 [![CI](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+thoughtproof-mcp — local stdio. Hero tool `verify_decision` (DQL spend / Sentinel irreversible exit). `execute` is `true` only on ALLOW.
+
 MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decision verification for AI agents.
 
 **Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`.
 
-Published on npm as [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) (`latest`).
+This package is a **local stdio** MCP server (Node 18+) for Desktop / CLI hosts such as Cursor, Claude Desktop, Windsurf, and Cline. It is **not** a remote HTTP MCP server. It is **not** a Grok Web/Mobile custom connector.
+
+Get keys at [https://app.thoughtproof.ai/pricing](https://app.thoughtproof.ai/pricing).
 
 ## Quick Start
 
@@ -17,7 +21,7 @@ Published on npm as [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/tho
   "mcpServers": {
     "thoughtproof": {
       "command": "npx",
-      "args": ["-y", "thoughtproof-mcp"],
+      "args": ["-y", "thoughtproof-mcp@0.3.1"],
       "env": {
         "DQL_API_KEY": "dqlk_your_key_here"
       }
@@ -26,7 +30,7 @@ Published on npm as [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/tho
 }
 ```
 
-Install with `npx thoughtproof-mcp` or pin the release with `npx thoughtproof-mcp@0.3.0`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and any MCP-compatible client.
+Install with `npx -y thoughtproof-mcp@0.3.1`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
 
 ## Tools
 
