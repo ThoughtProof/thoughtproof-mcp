@@ -8,11 +8,35 @@ MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decisio
 
 **Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`.
 
-npm `latest` is still [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) (verify-key path only). This branch is **0.3.1** and is **not published**. Do not use 0.3.0 as the `dqla_` path.
+This package is a **local stdio** MCP server (Node 18+) for Desktop / CLI hosts such as Cursor and Claude Desktop. It is not a publicly reachable remote MCP server. Remote MCP (including Grok Web/Mobile custom connectors) is out of scope and not shipped.
+
+npm `latest` is still [`thoughtproof-mcp@0.3.0`](https://www.npmjs.com/package/thoughtproof-mcp) until `0.3.1` is published. Pin the published package as `thoughtproof-mcp@0.3.1` (metadata-only listing release; same runtime as `0.3.0`, verify-key path only). This branch is **unpublished 0.4.0-dev** and is the `dqla_` path — not the npm pin. See [UNRELEASED.md](./UNRELEASED.md).
 
 ## Quick Start
 
-This package is a **local stdio** MCP server (Node 18+) for Desktop / CLI hosts such as Cursor and Claude Desktop. It is not a publicly reachable remote MCP server. Remote MCP (including Grok Web/Mobile custom connectors) is out of scope and not shipped.
+### Published install (`thoughtproof-mcp@0.3.1`)
+
+`0.3.1` is the metadata-only npm release (same runtime as `0.3.0`) and is the pin once published. Until Raul publishes `0.3.1`, npm `latest` remains `0.3.0`.
+
+```json
+{
+  "mcpServers": {
+    "thoughtproof": {
+      "command": "npx",
+      "args": ["-y", "thoughtproof-mcp@0.3.1"],
+      "env": {
+        "DQL_API_KEY": "dqlk_your_verify_key"
+      }
+    }
+  }
+}
+```
+
+Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
+
+### Unpublished 0.4.0-dev (`dqla_` path)
+
+This branch is **not published** and is **not** the npm pin. It adds `dqla_` / `DQL_ACCOUNT_TOKEN` (`X-DQL-Account`). Do not treat `0.3.0` or `0.3.1` as the `dqla_` path.
 
 Desktop / CLI hosts can use the account token `dqla_…` shown **once** on checkout reveal. Hold that same token for `GET /dql/account` — the account route uses it; it does not issue a new one. You do **not** need to paste the raw verify key `dqlk_…`.
 
@@ -22,8 +46,8 @@ The `dqla_` path needs a DQL deploy that accepts `X-DQL-Account` on `POST /dql/v
 {
   "mcpServers": {
     "thoughtproof": {
-      "command": "npx",
-      "args": ["-y", "thoughtproof-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/thoughtproof-mcp/dist/index.js"],
       "env": {
         "DQL_ACCOUNT_TOKEN": "dqla_your_account_token"
       }
@@ -34,7 +58,7 @@ The `dqla_` path needs a DQL deploy that accepts `X-DQL-Account` on `POST /dql/v
 
 `DQL_API_KEY` (alias `THOUGHTPROOF_DQL_KEY`) still works: set it to `dqlk_…` for the raw verify key, or to `dqla_…` for the same account-token path. If both a `dqlk_` key and a `dqla_` token are set, only the key is sent.
 
-For the published verify-key release, `npx thoughtproof-mcp` / `npx thoughtproof-mcp@0.3.0`. The `dqla_` path is **0.3.1** on this branch (`npm run build`, then point the host at `dist/index.js`). Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
+Build locally (`npm run build`, then point the host at `dist/index.js`). Do not `npx thoughtproof-mcp@0.3.1` for `dqla_`.
 
 ## Tools
 

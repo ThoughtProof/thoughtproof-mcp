@@ -2,9 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] / 0.3.1
+## [Unreleased] / 0.4.0
 
-Not published. **0.3.0** on npm is not the `dqla_` path.
+Not published. This tree is unpublished **0.4.0-dev** and is the `dqla_` path. **0.3.1** is reserved for the metadata-only listing tarball cut from the real **0.3.0** tree (`d70470b`) and is not the `dqla_` path. **0.3.0** on npm is also not the `dqla_` path.
 
 ### Added
 - `verify_decision` accepts a DQL account token (`dqla_…`) via `DQL_ACCOUNT_TOKEN` or the same env as the verify key when the value starts with `dqla_`. Sent as `X-DQL-Account` only (never together with `X-DQL-Key` or `Authorization`).
