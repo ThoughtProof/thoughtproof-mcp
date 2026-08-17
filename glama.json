@@ -2,7 +2,7 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "maintainers": ["ThoughtProof"],
   "name": "thoughtproof-mcp",
-  "description": "Verify AI reasoning with adversarial multi-model verification. 3–4 LLMs evaluate independently, a dedicated red-team model critiques all verdicts, and a synthesizer produces the final decision — ALLOW, BLOCK, or UNCERTAIN with confidence score and objections.",
+  "description": "Local stdio MCP server. Hero tool verify_decision routes spend to DQL and irreversible actions to Sentinel; execute is true only on ALLOW.",
   "type": "mcp_server",
   "status": "stable",
   "framework": "@modelcontextprotocol/sdk",
