@@ -1,6 +1,7 @@
 {
   "name": "thoughtproof-mcp",
-  "version": "0.3.1",
+  "version": "0.3.0",
+  "mcpName": "io.github.ThoughtProof/thoughtproof-mcp",
   "description": "MCP server for ThoughtProof \u2014 verify AI reasoning with adversarial multi-model consensus",
   "type": "module",
   "main": "dist/index.js",

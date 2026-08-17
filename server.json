@@ -1,0 +1,45 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ThoughtProof/thoughtproof-mcp",
+  "title": "ThoughtProof",
+  "description": "Local stdio MCP. Hero verify_decision (DQL spend / Sentinel exit). execute true only on ALLOW.",
+  "repository": {
+    "url": "https://github.com/ThoughtProof/thoughtproof-mcp",
+    "source": "github"
+  },
+  "version": "0.3.0",
+  "websiteUrl": "https://thoughtproof.ai",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "thoughtproof-mcp",
+      "version": "0.3.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "DQL_API_KEY",
+          "description": "DQL verify key for verify_decision. Get one at https://app.thoughtproof.ai/pricing.",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "SENTINEL_API_KEY",
+          "description": "Optional. Required when mode=sentinel or auto-route picks Sentinel.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "THOUGHTPROOF_API_KEY",
+          "description": "Optional operator key for verify_claim / verify_trade / Sentinel fallback.",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
