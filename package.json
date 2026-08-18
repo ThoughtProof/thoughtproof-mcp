@@ -1,7 +1,7 @@
 {
   "name": "thoughtproof-mcp",
-  "version": "0.3.0",
-  "description": "MCP server for ThoughtProof \u2014 verify AI reasoning with adversarial multi-model consensus",
+  "version": "0.3.2",
+  "description": "MCP server for ThoughtProof — pre-action verification gate (verify before pay/trade/write/deploy)",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -26,7 +26,10 @@
     "adversarial",
     "x402",
     "erc-8004",
-    "decision-verification"
+    "decision-verification",
+    "pre-action-gate",
+    "verify-before-action",
+    "fail-closed"
   ],
   "author": "ThoughtProof <raul@thoughtproof.ai>",
   "homepage": "https://thoughtproof.ai",

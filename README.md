@@ -4,9 +4,10 @@
 [![CI](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decision verification for AI agents.
+MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-action verification gate for autonomous agents: **verify before they pay, trade, write or deploy**.
 
-**Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`. This change is **not published to npm**; run from this repo / branch.
+
+**Hero tools:** `verify_before_action` (alias) / `verify_decision` (canonical). It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`. This change is **not published to npm**; run from this repo / branch.
 
 ## Quick Start
 
