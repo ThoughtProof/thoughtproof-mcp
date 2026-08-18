@@ -4,11 +4,11 @@
 [![CI](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-thoughtproof-mcp — local stdio. Hero tool `verify_decision` (DQL spend / Sentinel irreversible exit). `execute` is `true` only on ALLOW.
+thoughtproof-mcp — local stdio. Hero tools `verify_before_action` / `verify_decision` (DQL spend / Sentinel irreversible exit). Verify before pay/trade/write/deploy. `execute` is `true` only on ALLOW.
 
-MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decision verification for AI agents.
+MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-action verification gate for autonomous agents: **verify before they pay, trade, write or deploy**.
 
-**Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`.
+**Hero tools:** `verify_before_action` (alias) / `verify_decision` (canonical). Same handler. Routes to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`.
 
 This package is a **local stdio** MCP server (Node 18+) for Desktop / CLI hosts such as Cursor, Claude Desktop, Windsurf, and Cline. It is **not** a remote HTTP MCP server. It is **not** a Grok Web/Mobile custom connector.
 
@@ -21,7 +21,7 @@ Get keys at [https://app.thoughtproof.ai/pricing](https://app.thoughtproof.ai/pr
   "mcpServers": {
     "thoughtproof": {
       "command": "npx",
-      "args": ["-y", "thoughtproof-mcp@0.3.1"],
+      "args": ["-y", "thoughtproof-mcp@0.3.2"],
       "env": {
         "DQL_API_KEY": "dqlk_your_key_here"
       }
@@ -30,11 +30,13 @@ Get keys at [https://app.thoughtproof.ai/pricing](https://app.thoughtproof.ai/pr
 }
 ```
 
-Install with `npx -y thoughtproof-mcp@0.3.1`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
+Install with `npx -y thoughtproof-mcp@0.3.2`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
 
 ## Tools
 
-### `verify_decision` (hero)
+### `verify_before_action` / `verify_decision` (hero)
+
+`verify_before_action` is an alias of `verify_decision` (identical schema + handler).
 
 Pre-execution gate for a proposed action. Routing is inside the tool — not an agent quiz.
 

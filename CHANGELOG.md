@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2
+
+### Added
+- `verify_before_action` tool alias (same handler as `verify_decision`)
+- Pre-action gate positioning: verify before pay/trade/write/deploy
+
+### Changed
+- Hero tool description sharpened for host wire-up / intent match
+- package/glama/README discovery copy aligned
+
+
 All notable changes to this project will be documented in this file.
 
 ## [0.3.1] - 2026-08-17

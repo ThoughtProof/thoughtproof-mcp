@@ -1,13 +1,17 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
-  "maintainers": ["ThoughtProof"],
+  "maintainers": [
+    "ThoughtProof"
+  ],
   "name": "thoughtproof-mcp",
-  "description": "Local stdio MCP server. Hero tool verify_decision routes spend to DQL and irreversible actions to Sentinel; execute is true only on ALLOW.",
+  "description": "Pre-action verification gate: verify before pay/trade/write/deploy. Hero tools verify_before_action / verify_decision; execute true only on ALLOW.",
   "type": "mcp_server",
   "status": "stable",
   "framework": "@modelcontextprotocol/sdk",
-  "tools": 2,
-  "transport": ["stdio"],
+  "tools": 5,
+  "transport": [
+    "stdio"
+  ],
   "keywords": [
     "verification",
     "ai-safety",
@@ -19,7 +23,12 @@
     "mcp-server",
     "x402",
     "erc-8183",
-    "base"
+    "base",
+    "pre-action-gate",
+    "verify-before-action",
+    "fail-closed",
+    "dql",
+    "sentinel"
   ],
   "features": {
     "adversarial_verification": {

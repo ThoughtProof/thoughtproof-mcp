@@ -23,6 +23,7 @@ describe("thoughtproof-mcp server", () => {
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name);
     assert.ok(names.includes("verify_decision"), "missing verify_decision");
+    assert.ok(names.includes("verify_before_action"), "missing verify_before_action alias");
     assert.ok(names.includes("verify_claim"), "missing verify_claim");
     assert.ok(names.includes("check_agent_score"), "missing check_agent_score");
   });
