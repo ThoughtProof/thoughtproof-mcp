@@ -35,7 +35,7 @@ const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
 async function apiCall(path: string, body?: Record<string, unknown>): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.3.1",
+    "User-Agent": "thoughtproof-mcp/0.4.0-dev",
   };
   if (API_KEY) {
     headers["X-Operator-Key"] = API_KEY;
@@ -96,56 +96,92 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
 
 const server = new McpServer({
   name: "thoughtproof",
-  version: "0.3.1",
+  version: "0.4.0-dev",
 });
 
-// Hero tool: verify_decision — DQL (default/spend) or Sentinel (irreversible exit).
-// Does not call RV/PLV. Camera mandate: the agent must NOT put the overshoot
-// in proposed_action or reasoning; the verifier has to find the mismatch.
+// Hero tool: pre-action verification gate.
+// Canonical name: verify_decision. Alias: verify_before_action (same handler).
+// Routes DQL (spend) or Sentinel (irreversible exit). Soft fail-closed: execute=true ONLY on ALLOW.
+// Auth path unchanged: resolveDqlCredential (dqlk_ / dqla_ / DQL_ACCOUNT_TOKEN).
+const VERIFY_BEFORE_ACTION_DESCRIPTION =
+  "ThoughtProof pre-action verification gate: verify before the agent pays, trades, writes, or deploys. " +
+  "Call this BEFORE any consequential tool (payment, trade, transfer, publish, delete, deploy, irreversible write). " +
+  "Returns { verdict: ALLOW|BLOCK|UNCERTAIN|…, execute: boolean, objections, receipt_id, surface, axes?, recommendation }. " +
+  "execute is true ONLY on ALLOW — on any other result do NOT execute (soft fail-closed; host must honor execute=false). " +
+  "Routes internally to DQL (spend/checkout) or Sentinel (irreversible exit). " +
+  "Camera mandate: you must NOT put the overshoot or constraint violation in proposed_action or reasoning " +
+  '(for example, do not write "price is above the cap"). Put the user goal in mandate, the action you are about to take ' +
+  "in proposed_action, and your plan in reasoning — the verifier must find the mismatch. " +
+  "Replan = new call = new receipt. Aliases: verify_decision, verify_before_action, verify_before_act.";
+
+const verifyBeforeActionSchema = {
+  mandate: z
+    .string()
+    .min(1)
+    .describe("The user's stated goal or instruction the agent is acting on."),
+  proposed_action: z
+    .string()
+    .min(1)
+    .describe(
+      "What the agent is about to do (pay/trade/write/deploy/…). Do not include the overshoot or constraint violation here."
+    ),
+  reasoning: z
+    .string()
+    .min(1)
+    .describe(
+      "The agent's own plan or reasoning. Do not include the overshoot; the verifier has to find the mismatch."
+    ),
+  context: z
+    .string()
+    .optional()
+    .describe("Optional extra evidence, tool outputs, or prior turns."),
+  mode: z
+    .enum(["dql", "sentinel", "auto"])
+    .optional()
+    .describe(
+      "Routing override. auto (default) picks DQL for spend/checkout language and Sentinel for high-blast irreversible exits; unsure → DQL. Explicit mode wins."
+    ),
+};
+
+async function handleVerifyBeforeAction(args: {
+  mandate: string;
+  proposed_action: string;
+  reasoning: string;
+  context?: string;
+  mode?: "dql" | "sentinel" | "auto";
+}) {
+  const envelope = await verifyDecision(
+    {
+      mandate: args.mandate,
+      proposed_action: args.proposed_action,
+      reasoning: args.reasoning,
+      context: args.context,
+      mode: args.mode,
+    },
+    {
+      dqlAuth: resolveDqlCredential(process.env),
+      sentinelApiKey: process.env.SENTINEL_API_KEY || process.env.THOUGHTPROOF_API_KEY,
+      sandbox: process.env.DQL_SANDBOX === "1",
+    },
+  );
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(envelope, null, 2) }],
+  };
+}
+
 server.tool(
   "verify_decision",
-  "Pre-execution gate for a proposed agent action (hero tool). Routes internally to DQL or Sentinel and returns { verdict, execute, objections, receipt_id, surface, axes?, recommendation }. execute is true ONLY on ALLOW — on any other result treat this as do-not-execute (soft fail-closed; this tool does not hard-stop the host). Camera mandate: you must NOT put the overshoot or constraint violation in proposed_action or reasoning (for example, do not write \"price is above the cap\"). State the user's goal in mandate, the action you are about to take in proposed_action, and your own plan in reasoning. The verifier has to find the mismatch. Replan is a new call with a new receipt.",
-  {
-    mandate: z
-      .string()
-      .min(1)
-      .describe("The user's stated goal or instruction the agent is acting on."),
-    proposed_action: z
-      .string()
-      .min(1)
-      .describe(
-        "What the agent is about to do. Do not include the overshoot or constraint violation here (e.g. do not write \"price is above the cap\")."
-      ),
-    reasoning: z
-      .string()
-      .min(1)
-      .describe(
-        "The agent's own plan or reasoning. Do not include the overshoot or constraint violation here; the verifier has to find the mismatch."
-      ),
-    context: z
-      .string()
-      .optional()
-      .describe("Optional extra evidence, tool outputs, or prior turns."),
-    mode: z
-      .enum(["dql", "sentinel", "auto"])
-      .optional()
-      .describe(
-        "Routing override. auto (default) picks DQL for spend/checkout language and Sentinel for high-blast irreversible exits; unsure → DQL. Explicit mode wins. RV/PLV are not available."
-      ),
-  },
-  async ({ mandate, proposed_action, reasoning, context, mode }) => {
-    const envelope = await verifyDecision(
-      { mandate, proposed_action, reasoning, context, mode },
-      {
-        dqlAuth: resolveDqlCredential(process.env),
-        sentinelApiKey: process.env.SENTINEL_API_KEY || process.env.THOUGHTPROOF_API_KEY,
-        sandbox: process.env.DQL_SANDBOX === "1",
-      }
-    );
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(envelope, null, 2) }],
-    };
-  }
+  VERIFY_BEFORE_ACTION_DESCRIPTION,
+  verifyBeforeActionSchema,
+  handleVerifyBeforeAction,
+);
+
+// Explicit alias for hosts/skills that search by pre-action intent keywords.
+server.tool(
+  "verify_before_action",
+  VERIFY_BEFORE_ACTION_DESCRIPTION,
+  verifyBeforeActionSchema,
+  handleVerifyBeforeAction,
 );
 
 // Tool: verify_claim (RV /v1/check) — unchanged.

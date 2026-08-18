@@ -2,7 +2,7 @@
   "name": "thoughtproof-mcp",
   "version": "0.4.0-dev",
   "mcpName": "io.github.ThoughtProof/thoughtproof-mcp",
-  "description": "Local MCP server for pre-execution decision verification. DQL for spend, Sentinel for irreversible actions; execute only on ALLOW.",
+  "description": "Local MCP server (0.4.0-dev unpublished). Hero tools verify_before_action / verify_decision; execute only on ALLOW. dqla_ path present; published pin is thoughtproof-mcp@0.3.2.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -27,7 +27,10 @@
     "adversarial",
     "x402",
     "erc-8004",
-    "decision-verification"
+    "decision-verification",
+    "pre-action-gate",
+    "verify-before-action",
+    "fail-closed"
   ],
   "author": "ThoughtProof <raul@thoughtproof.ai>",
   "homepage": "https://thoughtproof.ai",

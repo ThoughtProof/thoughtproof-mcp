@@ -23,7 +23,7 @@ Unpublished work is documented in [UNRELEASED.md](./UNRELEASED.md).
   "mcpServers": {
     "thoughtproof": {
       "command": "npx",
-      "args": ["-y", "thoughtproof-mcp@0.3.1"],
+      "args": ["-y", "thoughtproof-mcp@0.3.2"],
       "env": {
         "DQL_API_KEY": "dqlk_your_key_here"
       }
@@ -32,11 +32,13 @@ Unpublished work is documented in [UNRELEASED.md](./UNRELEASED.md).
 }
 ```
 
-Install with `npx -y thoughtproof-mcp@0.3.1`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
+Install with `npx -y thoughtproof-mcp@0.3.2`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
 
 ## Tools
 
-### `verify_decision` (hero)
+### `verify_before_action` / `verify_decision` (hero)
+
+`verify_before_action` is an alias of `verify_decision` (identical schema + handler). Soft fail-closed: host must honor `execute=false`.
 
 Pre-execution gate for a proposed action. Routing is inside the tool — not an agent quiz.
 
