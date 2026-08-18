@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+
+### Added (unreleased / 0.4.0-dev tree only — not npm)
+- `verify_before_action` alias tool (same handler as `verify_decision`)
+- Pre-action gate descriptor: verify before pay/trade/write/deploy
+- Published listing pin documented as **thoughtproof-mcp@0.3.2** (separate release line)
+
 ## [Unreleased] / 0.4.0
 
 Not published. This tree is unpublished **0.4.0-dev** and is the `dqla_` path. **0.3.1** is reserved for the metadata-only listing tarball cut from the real **0.3.0** tree (`d70470b`) and is not the `dqla_` path. **0.3.0** on npm is also not the `dqla_` path.

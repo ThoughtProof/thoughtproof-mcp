@@ -2,14 +2,14 @@
 
 This tree is **not** the Official Registry / npm listing surface. Do not publish this tree.
 
-Crawlers should read [README.md](./README.md), `server.json`, and `glama.json`. Those files describe the **published** product (`thoughtproof-mcp@0.3.1`). This file is the only public doc that describes the unpublished path.
+Crawlers should read [README.md](./README.md), `server.json`, and `glama.json`. Those files describe the **published** product (`thoughtproof-mcp@0.3.2`). This file is the only public doc that describes the unpublished path.
 
 ## Identity
 
 - **npm 0.3.1** (when published) is a metadata-only listing tarball cut from the real 0.3.0 tree (`d70470b`). Same runtime as 0.3.0; **no `dqla_`**.
 - **This tree** is unpublished `0.4.0-dev`. It continues the `dqla_` / `DQL_ACCOUNT_TOKEN` / `X-DQL-Account` path from #4. It is **not** the npm pin.
 - `package.json` version stays `0.4.0-dev`. `mcpName` is present so a later 0.4.0 release keeps Official Registry ownership.
-- `server.json` on this tree points at the **published** npm package `thoughtproof-mcp@0.3.1` (not `0.4.0-dev`).
+- `server.json` on this tree points at the **published** npm package `thoughtproof-mcp@0.3.2` (not `0.4.0-dev`).
 
 Do not treat `0.3.0` or `0.3.1` as the `dqla_` path.
 
@@ -27,7 +27,7 @@ Fail-closed on DQL `401 ACCOUNT_UNAUTHORIZED`: `execute: false`, exactly one HTT
 
 ## Local install (this tree only)
 
-Build locally, then point the host at `dist/index.js`. Do not `npx thoughtproof-mcp@0.3.1` for `dqla_`.
+Build locally, then point the host at `dist/index.js`. Do not `npx thoughtproof-mcp@0.3.2` for `dqla_`.
 
 ```json
 {
