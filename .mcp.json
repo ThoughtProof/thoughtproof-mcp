@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "thoughtproof": {
+      "command": "npx",
+      "args": ["-y", "thoughtproof-mcp@0.3.2"],
+      "env": {
+        "DQL_API_KEY": "${DQL_API_KEY}"
+      }
+    }
+  }
+}

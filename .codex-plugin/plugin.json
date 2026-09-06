@@ -1,0 +1,37 @@
+{
+  "name": "thoughtproof-mcp",
+  "version": "0.4.0-dev",
+  "description": "Local stdio MCP server for pre-action decision verification. Hero tools verify_before_action / verify_decision: mandate + proposed action → ALLOW/BLOCK/UNCERTAIN; execute only on ALLOW. Fail-closed on missing key, timeout, or non-ALLOW. Catalog score is not next-action authorization.",
+  "author": {
+    "name": "ThoughtProof",
+    "email": "raul@thoughtproof.ai",
+    "url": "https://thoughtproof.ai"
+  },
+  "homepage": "https://thoughtproof.ai",
+  "repository": "https://github.com/ThoughtProof/thoughtproof-mcp",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "verification",
+    "pre-action",
+    "fail-closed",
+    "decision-verification",
+    "codex",
+    "agents"
+  ],
+  "mcpServers": "../.mcp.json",
+  "interface": {
+    "displayName": "ThoughtProof MCP",
+    "shortDescription": "Pre-action verification for agents. Execute only on ALLOW.",
+    "longDescription": "Local stdio MCP server. verify_decision / verify_before_action checks a proposed pay/trade/write/deploy against a mandate before the irreversible step. Returns ALLOW, BLOCK, or UNCERTAIN with execute=true only on ALLOW. Not identity, not a trust score, not HOL Guard. A listing or scanner score does not authorize the next action.",
+    "developerName": "ThoughtProof",
+    "category": "Security",
+    "capabilities": [
+      "Security",
+      "MCP",
+      "Pre-action verification"
+    ],
+    "websiteURL": "https://thoughtproof.ai",
+    "brandColor": "#0B1F3A"
+  }
+}
