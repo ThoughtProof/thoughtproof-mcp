@@ -26,7 +26,7 @@ Unpublished work is documented in [UNRELEASED.md](./UNRELEASED.md).
       "command": "npx",
       "args": ["-y", "thoughtproof-mcp@0.3.2"],
       "env": {
-        "DQL_API_KEY": "dqlk_your_key_here"
+        "DQL_API_KEY": "<YOUR_DQL_VERIFY_KEY>"
       }
     }
   }

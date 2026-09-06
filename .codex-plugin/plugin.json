@@ -1,7 +1,7 @@
 {
   "name": "thoughtproof-mcp",
-  "version": "0.4.0-dev",
-  "description": "Local stdio MCP server for pre-action decision verification. Hero tools verify_before_action / verify_decision: mandate + proposed action → ALLOW/BLOCK/UNCERTAIN; execute only on ALLOW. Fail-closed on missing key, timeout, or non-ALLOW. Catalog score is not next-action authorization.",
+  "version": "0.4.0",
+  "description": "Local stdio MCP server for pre-action decision verification. Hero tools verify_before_action / verify_decision: mandate + proposed action \u2192 ALLOW/BLOCK/UNCERTAIN; execute only on ALLOW. Fail-closed on missing key, timeout, or non-ALLOW. Catalog score is not next-action authorization.",
   "author": {
     "name": "ThoughtProof",
     "email": "raul@thoughtproof.ai",
@@ -31,7 +31,6 @@
       "MCP",
       "Pre-action verification"
     ],
-    "websiteURL": "https://thoughtproof.ai",
-    "brandColor": "#0B1F3A"
+    "websiteURL": "https://thoughtproof.ai"
   }
 }
