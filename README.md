@@ -2,6 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/thoughtproof-mcp.svg)](https://www.npmjs.com/package/thoughtproof-mcp)
 [![CI](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml)
+[![HOL Guard Scanner](https://img.shields.io/badge/HOL%20Guard-scanner-00a67e)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/hol-scanner.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 thoughtproof-mcp — local stdio. Hero tool `verify_decision` (DQL spend / Sentinel irreversible exit). `execute` is `true` only on ALLOW.
@@ -25,7 +26,7 @@ Unpublished work is documented in [UNRELEASED.md](./UNRELEASED.md).
       "command": "npx",
       "args": ["-y", "thoughtproof-mcp@0.3.2"],
       "env": {
-        "DQL_API_KEY": "dqlk_your_key_here"
+        "DQL_API_KEY": "<YOUR_DQL_VERIFY_KEY>"
       }
     }
   }
@@ -119,6 +120,12 @@ npm run inspect      # Test with MCP Inspector
 ```
 
 For local MCP clients, point `command` at `node` and `args` at `dist/index.js` after `npm run build`.
+
+## Security
+
+See [SECURITY.md](./SECURITY.md) for supported versions, private reporting (`security@thoughtproof.ai`), and key handling (`dqlk_…` for MCP hero — never commit real keys).
+
+HOL listing / Guard scanner score is a **review baseline only**. It is **not** next-action authorization and not a substitute for fail-closed host behavior (`execute: true` only on ALLOW).
 
 ## Related
 

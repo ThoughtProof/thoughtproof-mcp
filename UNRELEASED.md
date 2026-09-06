@@ -36,7 +36,7 @@ Build locally, then point the host at `dist/index.js`. Do not `npx thoughtproof-
       "command": "node",
       "args": ["/absolute/path/to/thoughtproof-mcp/dist/index.js"],
       "env": {
-        "DQL_ACCOUNT_TOKEN": "dqla_your_account_token"
+        "DQL_ACCOUNT_TOKEN": "<YOUR_DQL_ACCOUNT_TOKEN>"
       }
     }
   }
