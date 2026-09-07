@@ -22,4 +22,5 @@ startCommand:
       }
     })
   exampleConfig:
-    apiKey: "tp_op_your_key_here"
+    # Placeholder only — not a live credential. Host injects real key at runtime.
+    apiKey: "<YOUR_THOUGHTPROOF_OPERATOR_KEY>"

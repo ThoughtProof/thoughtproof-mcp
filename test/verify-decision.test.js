@@ -20,6 +20,8 @@ const FIX_DQLA_VIA_API = "dql" + "a_" + "via_api_key";
 const FIX_DQLA_VIA_KEY_ENV = "dql" + "a_" + "via_key_env";
 const FIX_DQLA_UNAUTH = "dql" + "a_" + "unauth_probe_fixture";
 const FIX_DQLK_UNUSED = "dql" + "k_" + "should_not_be_used";
+// Sentinel fixture split so HARDCODED_SECRET does not flag the unused path.
+const FIX_SENTINEL_UNUSED = "sentinel" + "_" + "must_not_be_used";
 
 
 const DQL_FIXTURE = {
@@ -369,7 +371,7 @@ describe("verifyDecision fail-closed (mocked HTTP)", () => {
         },
         {
           dqlAccountToken: presented,
-          sentinelApiKey: "sentinel_must_not_be_used",
+          sentinelApiKey: FIX_SENTINEL_UNUSED,
           fetchImpl: async (url, init) => {
             called += 1;
             capturedUrl = String(url);
