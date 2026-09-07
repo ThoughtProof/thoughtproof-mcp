@@ -21,6 +21,5 @@ startCommand:
         THOUGHTPROOF_BASE_URL: config.baseUrl || 'https://api.thoughtproof.ai'
       }
     })
-  exampleConfig:
-    # Placeholder only — not a live credential. Host injects real key at runtime.
-    apiKey: "<YOUR_THOUGHTPROOF_OPERATOR_KEY>"
+  # No exampleConfig secret literals — host supplies operator key at runtime.
+  exampleConfig: {}
