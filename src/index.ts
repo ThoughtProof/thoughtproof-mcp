@@ -26,6 +26,7 @@ import { z } from "zod";
 import { resolveDqlCredential } from "./dql-client.js";
 import { verifyTrade, PaymentRequiredError } from "./verify-client.js";
 import { verifyDecision } from "./verify-decision.js";
+import { defaultPayToFallback, parseX402PaymentRequired } from "./x402-challenge.js";
 
 const API_BASE = process.env.THOUGHTPROOF_BASE_URL || "https://api.thoughtproof.ai";
 const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
@@ -48,14 +49,9 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
   });
 
   if (response.status === 402) {
-    // Parse the x402 discovery response for accurate pricing
-    let details: any = {};
-    try {
-      details = await response.json();
-    } catch {}
-
-    const maxAmount = details?.accepts?.[0]?.maxAmountRequired;
-    const priceUSD = maxAmount ? `$${(parseInt(maxAmount) / 1_000_000).toFixed(3)}` : "varies";
+    // Header-first x402 challenge parse (payment-required), body fallback.
+    // Matches verify-client / Sentinel path expectations. See issue #16.
+    const parsed = await parseX402PaymentRequired(response);
 
     return {
       error: "payment_required",
@@ -68,9 +64,9 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
         fast: "$0.008",
         standard: "$0.02",
         deep: "$0.08",
-        thisRequest: priceUSD,
+        thisRequest: parsed.thisRequest,
         payment: "x402 / USDC on Base",
-        payTo: details?.accepts?.[0]?.payTo ?? "0xAB9f84864662f980614bD1453dB9950Ef2b82E83",
+        payTo: defaultPayToFallback(parsed.payTo),
       },
       setup:
         "To use this tool, you need a ThoughtProof operator key.\n" +
@@ -419,6 +415,9 @@ function formatPaymentRequired(result: any): string {
   output += `- Deep (5+ models): ${result.pricing.deep}\n`;
   if (result.pricing.thisRequest) {
     output += `- This request: ${result.pricing.thisRequest}\n`;
+  }
+  if (result.pricing.payTo) {
+    output += `- Pay to: ${result.pricing.payTo}\n`;
   }
   output += `- Payment: ${result.pricing.payment}\n`;
   if (result.setup) {
