@@ -4,3 +4,4 @@ dist/
 *.tgz
 runs-*.txt
 experiments/bilateral-steel-test/runs/
+experiments/bilateral-steel-test/.venv-camel/
