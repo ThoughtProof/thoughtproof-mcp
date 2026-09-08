@@ -102,8 +102,9 @@ const server = new McpServer({
 const VERIFY_BEFORE_ACTION_DESCRIPTION =
   "ThoughtProof pre-action verification gate: verify before the agent pays, trades, writes, or deploys. " +
   "Call this BEFORE any consequential tool (payment, trade, transfer, publish, delete, deploy, irreversible write). " +
-  "Returns { verdict: ALLOW|BLOCK|UNCERTAIN|…, execute: boolean, objections, receipt_id, surface, axes?, recommendation }. " +
+  "Returns { verdict, execute, objections, structured_objections, receipt_id, surface, loop, axes?, recommendation, in_reply_to? }. " +
   "execute is true ONLY on ALLOW — on any other result do NOT execute (soft fail-closed; host must honor execute=false). " +
+  "If structured_objections have severity blocked_until, repair using repair_hints and call again with in_reply_to set to that objection_id (new receipt; prior ALLOW does not carry). " +
   "Routes internally to DQL (spend/checkout) or Sentinel (irreversible exit). " +
   "Camera mandate: you must NOT put the overshoot or constraint violation in proposed_action or reasoning " +
   '(for example, do not write "price is above the cap"). Put the user goal in mandate, the action you are about to take ' +
@@ -137,6 +138,12 @@ const verifyBeforeActionSchema = {
     .describe(
       "Routing override. auto (default) picks DQL for spend/checkout language and Sentinel for high-blast irreversible exits; unsure → DQL. Explicit mode wins."
     ),
+  in_reply_to: z
+    .string()
+    .optional()
+    .describe(
+      "objection_id from a prior envelope structured_objections item. Marks this call as a repair. New receipt; prior ALLOW does not carry."
+    ),
 };
 
 async function handleVerifyBeforeAction(args: {
@@ -145,6 +152,7 @@ async function handleVerifyBeforeAction(args: {
   reasoning: string;
   context?: string;
   mode?: "dql" | "sentinel" | "auto";
+  in_reply_to?: string;
 }) {
   const envelope = await verifyDecision(
     {
@@ -153,6 +161,7 @@ async function handleVerifyBeforeAction(args: {
       reasoning: args.reasoning,
       context: args.context,
       mode: args.mode,
+      in_reply_to: args.in_reply_to,
     },
     {
       dqlAuth: resolveDqlCredential(process.env),

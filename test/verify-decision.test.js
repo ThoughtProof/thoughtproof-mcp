@@ -11,6 +11,7 @@ import {
   mapDqlEnvelope,
   mapSentinelEnvelope,
   verifyDecision,
+  applyRepairContext,
 } from "../dist/verify-decision.js";
 
 // Test-only credential shapes (split so static secret scanners do not flag fixtures).
@@ -184,6 +185,13 @@ describe("envelope mapping", () => {
     assert.equal(env.axes[1].verdict, "FAIL");
     assert.equal(env.axes[1].objection, "Flight arrives in Munich, not Rome.");
     assert.match(env.recommendation, /do not execute/);
+    assert.equal(env.loop, "challenged");
+    assert.ok(Array.isArray(env.structured_objections));
+    assert.equal(env.structured_objections.length, 1);
+    assert.equal(env.structured_objections[0].code, "SCOPE");
+    assert.equal(env.structured_objections[0].severity, "blocked_until");
+    assert.match(env.structured_objections[0].objection_id, /^o_dql_abc123_x7k9p2_scope$/);
+    assert.ok(env.structured_objections[0].repair_hints.includes("REVISE_CLAIM"));
   });
 
   it("maps a fixture Sentinel response", () => {
@@ -195,7 +203,11 @@ describe("envelope mapping", () => {
     assert.ok(env.objections.includes("No test results cited."));
     assert.ok(env.objections.includes("Insufficient evidence for a production deploy."));
     assert.equal(env.axes, undefined);
-    assert.match(env.recommendation, /replan from objections/);
+    assert.match(env.recommendation, /replan from objections|repair structured_objections/);
+    assert.equal(env.loop, "challenged");
+    assert.ok(env.structured_objections.length >= 1);
+    assert.equal(env.structured_objections[0].severity, "blocked_until");
+    assert.equal(env.structured_objections[0].code, "EVIDENCE");
   });
 
   it("sets execute true only when the native verdict is ALLOW", () => {
@@ -206,6 +218,8 @@ describe("envelope mapping", () => {
     });
     assert.equal(allowDql.execute, true);
     assert.equal(allowDql.recommendation, "execute");
+    assert.equal(allowDql.loop, "covered");
+    assert.deepEqual(allowDql.structured_objections, []);
 
     const reviewDql = mapDqlEnvelope({
       ...DQL_FIXTURE,
@@ -215,6 +229,55 @@ describe("envelope mapping", () => {
 
     const uncertain = mapSentinelEnvelope(SENTINEL_FIXTURE);
     assert.equal(uncertain.execute, false);
+  });
+});
+
+describe("structured objection repair loop", () => {
+  it("prefixes context when in_reply_to is set", () => {
+    const out = applyRepairContext({
+      mandate: "m",
+      proposed_action: "a",
+      reasoning: "r",
+      context: "prior notes",
+      in_reply_to: "o_dql_abc123_x7k9p2_scope",
+    });
+    assert.match(out.context, /in_reply_to=o_dql_abc123_x7k9p2_scope/);
+    assert.match(out.context, /prior notes/);
+    assert.match(out.context, /Prior ALLOW receipts do not carry/);
+  });
+
+  it("echoes in_reply_to and sets loop repairing on a mapped BLOCK", () => {
+    const env = mapDqlEnvelope(DQL_FIXTURE, "o_dql_abc123_x7k9p2_scope");
+    assert.equal(env.execute, false);
+    assert.equal(env.loop, "repairing");
+    assert.equal(env.in_reply_to, "o_dql_abc123_x7k9p2_scope");
+  });
+
+  it("forwards repair context to DQL body on mocked verify", async () => {
+    let captured;
+    const env = await verifyDecision(
+      {
+        mandate: "Buy milk under $5",
+        proposed_action: "Purchase milk for $4",
+        reasoning: "Under budget",
+        mode: "dql",
+        in_reply_to: "o_prev_scope",
+      },
+      {
+        dqlApiKey: FIX_DQLK,
+        fetchImpl: async (_url, init) => {
+          captured = JSON.parse(String(init.body));
+          return new Response(JSON.stringify(DQL_FIXTURE), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        },
+      },
+    );
+    assert.match(captured.context, /in_reply_to=o_prev_scope/);
+    assert.equal(env.loop, "repairing");
+    assert.equal(env.in_reply_to, "o_prev_scope");
+    assert.equal(env.execute, false);
   });
 });
 

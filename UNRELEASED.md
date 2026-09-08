@@ -1,5 +1,12 @@
 # Unpublished 0.4.0-dev
 
+## Structured objections / repair loop (unpublished tree)
+
+Envelope now includes `structured_objections[]` (id, code, severity `block`|`blocked_until`, claim, message, repair_hints) plus `loop` and optional `in_reply_to`. Compat: `objections: string[]` unchanged. `execute` still true only on ALLOW.
+
+This is **not** a DQL/Sentinel API change. Mapping is local (DQL axes / Sentinel objection objects → structured). Host must honor `execute=false`. Next call with `in_reply_to` is a **new** receipt; prior ALLOW does not carry. No npm publish of this tree.
+
+
 This tree is **not** the Official Registry / npm listing surface. Do not publish this tree.
 
 Crawlers should read [README.md](./README.md), `server.json`, and `glama.json`. Those files describe the **published** product (`thoughtproof-mcp@0.3.2`). This file is the only public doc that describes the unpublished path.
