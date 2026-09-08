@@ -8,7 +8,8 @@
 2. Host-contract tests in `test/repair-loop-host.test.js` (mocked DQL).
 3. **Live protocol slice** `live-protocol-slice.mjs` — 2026-09-08 run **4/4 PASS** (see `LIVE-PROTOCOL-2026-09-08.md`). GMX `dqlk_`. Comparison A only.
 4. **Comparison B detector slice** `comp-b-critic.py` — DET-heavy 7/7, no detector lift. `COMP-B-2026-09-08.md`.
-5. **Non-DET 23–25** `nendet-2325.py` — Seller ALLOW / Buyer BLOCK / repair ALLOW live. Critic also refused all 3 buyers (**0 detector lift**). Case24 = DET. `NENDET-2325-2026-09-08.md`.
+5. **Non-DET 23–25** `nendet-2325.py` — Seller ALLOW / Buyer BLOCK / repair ALLOW. Critic also refused. Case24 = DET. `NENDET-2325-2026-09-08.md`.
+6. **Actor vs gate** `actor-vs-gate.py` — motivated buyer first pass would close 23/25; DQL BLOCK; self-critique also stopped (v2). `ACTOR-VS-GATE-2026-09-08.md`.
 
 ## What is not implemented
 
