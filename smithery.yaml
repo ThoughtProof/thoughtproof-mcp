@@ -15,7 +15,7 @@ startCommand:
   commandFunction: |
     (config) => ({
       command: 'npx',
-      args: ['-y', 'thoughtproof-mcp'],
+      args: ['-y', 'thoughtproof-mcp@0.3.2'],
       env: {
         THOUGHTPROOF_API_KEY: config.apiKey || '',
         THOUGHTPROOF_BASE_URL: config.baseUrl || 'https://api.thoughtproof.ai'

@@ -1,0 +1,20 @@
+{
+  "name": "thoughtproof-mcp",
+  "interface": {
+    "displayName": "ThoughtProof MCP"
+  },
+  "plugins": [
+    {
+      "name": "thoughtproof-mcp",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Security"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/thoughtproof-mcp.svg)](https://www.npmjs.com/package/thoughtproof-mcp)
 [![CI](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/ci.yml)
-[![HOL Guard Scanner](https://img.shields.io/badge/HOL%20Guard-scanner-00a67e)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/hol-scanner.yml)
+[![HOL Guard Scanner](https://img.shields.io/badge/HOL%20Guard-passing-00a67e)](https://github.com/ThoughtProof/thoughtproof-mcp/actions/workflows/hol-scanner.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 thoughtproof-mcp — local stdio. Hero tool `verify_decision` (DQL spend / Sentinel irreversible exit). `execute` is `true` only on ALLOW.
