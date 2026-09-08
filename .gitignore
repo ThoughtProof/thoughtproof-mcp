@@ -5,3 +5,4 @@ dist/
 runs-*.txt
 experiments/bilateral-steel-test/runs/
 experiments/bilateral-steel-test/.venv-camel/
+experiments/bilateral-steel-test/.vendor-agenticpay/

@@ -11,7 +11,8 @@
 5. **Non-DET 23–25** `nendet-2325.py` — Seller ALLOW / Buyer BLOCK / repair ALLOW. Critic also refused. Case24 = DET. `NENDET-2325-2026-09-08.md`.
 6. **Actor vs gate** `actor-vs-gate.py` — motivated first pass would close; DQL BLOCK. `ACTOR-VS-GATE-2026-09-08.md`.
 7. **Foreign repair** `foreign-repair-2325.py` — our Grok Seller B; 23 ALLOW / 25 HUMAN. `FOREIGN-REPAIR-2026-09-08.md`.
-8. **CAMEL blind** `camel-blind.py` — camel-ai 0.2.90, anti-cheat freeze. 23/25 structured PASS; both critic-prose FAIL. `CAMEL-BLIND-2026-09-08.md`.
+8. **CAMEL blind** `camel-blind.py` — 23/25 structured PASS; critic-prose FAIL. `CAMEL-BLIND-2026-09-08.md`.
+9. **AgenticPay blind** `agenticpay-blind.py` — unmodified SellerAgent. Understood structured 23/25; raw-chat DQL wrap all BLOCK; prose also conceded 23. Not CAMEL replica. `AGENTICPAY-BLIND-2026-09-08.md`.
 
 ## What is not implemented
 
