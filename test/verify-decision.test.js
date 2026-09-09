@@ -16,6 +16,7 @@ import {
 import {
   buildSentinelEvidence,
   buildSentinelVerifyBody,
+  HOST_QUOTE_MIN_CHARS,
   resolveMandateQuote,
   SENTINEL_VERIFY_BODY_FIELDS,
 } from "../dist/sentinel-decision-client.js";
@@ -172,18 +173,57 @@ describe("Sentinel mandate quote / provenance wiring", () => {
   };
 
   it("uses the full mandate as the quote when the host omits quote", () => {
-    assert.equal(resolveMandateQuote(input), input.mandate);
+    const resolved = resolveMandateQuote(input);
+    assert.equal(resolved.quote, input.mandate);
+    assert.equal(resolved.usedHostQuote, false);
+    assert.equal(resolved.fallbackReason, "omitted");
   });
 
   it("accepts a host quote only when it is a verbatim substring of the mandate", () => {
-    assert.equal(
-      resolveMandateQuote({ ...input, quote: "Ship the release to production" }),
-      "Ship the release to production",
-    );
-    assert.equal(
-      resolveMandateQuote({ ...input, quote: "deploy whenever you feel like it" }),
-      input.mandate,
-    );
+    const accepted = resolveMandateQuote({ ...input, quote: "Ship the release to production" });
+    assert.equal(accepted.quote, "Ship the release to production");
+    assert.equal(accepted.usedHostQuote, true);
+
+    const paraphrased = resolveMandateQuote({
+      ...input,
+      quote: "deploy whenever you feel like it",
+    });
+    assert.equal(paraphrased.quote, input.mandate);
+    assert.equal(paraphrased.usedHostQuote, false);
+    assert.equal(paraphrased.fallbackReason, "not_in_mandate");
+  });
+
+  it("rejects host quotes shorter than the 20-character floor", () => {
+    assert.ok(HOST_QUOTE_MIN_CHARS === 20);
+    const short = resolveMandateQuote({ ...input, quote: "S" });
+    assert.equal(short.quote, input.mandate);
+    assert.equal(short.usedHostQuote, false);
+    assert.equal(short.fallbackReason, "too_short");
+
+    const nineteen = "Ship the release to"; // 19 chars
+    assert.equal(nineteen.length, 19);
+    const justUnder = resolveMandateQuote({ ...input, quote: nineteen });
+    assert.equal(justUnder.fallbackReason, "too_short");
+    assert.equal(justUnder.quote, input.mandate);
+  });
+
+  it("notes whitespace-only membership and still embeds the full mandate", () => {
+    const mandate = "Ship the release\nto production only after CI is green.";
+    const host = "Ship the release to production only after CI is green.";
+    const resolved = resolveMandateQuote({ mandate, quote: host });
+    assert.equal(resolved.usedHostQuote, false);
+    assert.equal(resolved.fallbackReason, "whitespace_normalized_only");
+    assert.equal(resolved.quote, mandate);
+
+    const evidence = buildSentinelEvidence({
+      mandate,
+      proposed_action: input.proposed_action,
+      reasoning: input.reasoning,
+      quote: host,
+    });
+    assert.match(evidence, /whitespace collapse/);
+    assert.ok(evidence.includes(mandate));
+    assert.match(evidence, /Principal mandate \(verbatim quote\):\nShip the release\nto production/);
   });
 
   it("embeds the mandate quote and proposed action in evidence", () => {
@@ -243,6 +283,32 @@ describe("Sentinel mandate quote / provenance wiring", () => {
     assert.ok(captured.evidence.includes(input.proposed_action));
     assert.equal(env.surface, "sentinel");
     assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+  });
+
+  it("fails closed on empty/whitespace mandate without calling Sentinel", async () => {
+    let called = 0;
+    const env = await verifyDecision(
+      {
+        mandate: "   ",
+        proposed_action: "Deploy the API to production",
+        reasoning: "CI is green",
+        mode: "sentinel",
+      },
+      {
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async () => {
+          called += 1;
+          throw new Error("should not fetch");
+        },
+      },
+    );
+    assert.equal(called, 0);
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.equal(env.surface, "sentinel");
+    assert.equal(env.structured_objections[0].code, "MANDATE_REQUIRED");
+    assert.match(env.objections.join(" "), /mandate is required/);
   });
 });
 

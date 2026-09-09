@@ -137,7 +137,8 @@ const verifyBeforeActionSchema = {
     .optional()
     .describe(
       "Optional verbatim excerpt of the user's mandate (copy the user instruction, do not paraphrase). " +
-        "Wired into Sentinel evidence for provenance. If omitted, the full mandate is used as the quote."
+        "Wired into Sentinel evidence for provenance. Must be at least 20 characters and an exact " +
+        "substring of mandate; otherwise the full mandate is used as the quote."
     ),
   mode: z
     .enum(["dql", "sentinel", "auto"])

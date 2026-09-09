@@ -7,13 +7,13 @@ All notable changes to this project will be documented in this file.
 - `verify_before_action` alias tool (same handler as `verify_decision`)
 - Pre-action gate descriptor: verify before pay/trade/write/deploy
 - Published listing pin documented as **thoughtproof-mcp@0.3.2** (separate release line)
-- Sentinel-mode verify wires a verbatim mandate quote into `evidence` (no top-level `quote`; live Sentinel whitelist 400s that field) so PLV provenance can match
 
 ## [Unreleased] / 0.4.0
 
 Not published. This tree is unpublished **0.4.0-dev** and is the `dqla_` path. **0.3.1** is reserved for the metadata-only listing tarball cut from the real **0.3.0** tree (`d70470b`) and is not the `dqla_` path. **0.3.0** on npm is also not the `dqla_` path.
 
 ### Added
+- Sentinel-mode `verify_before_action` / `verify_decision` wires a verbatim mandate quote into `evidence` (no top-level `quote`; live Sentinel whitelist 400s that field) so PLV provenance can match. Host `quote` must be ≥20 characters and an exact substring of `mandate`; otherwise the full mandate is used. Empty/whitespace mandate fails closed (`MANDATE_REQUIRED`, `execute: false`) without calling Sentinel.
 - `verify_decision` accepts a DQL account token (`dqla_…`) via `DQL_ACCOUNT_TOKEN` or the same env as the verify key when the value starts with `dqla_`. Sent as `X-DQL-Account` only (never together with `X-DQL-Key` or `Authorization`).
 - Desktop / CLI stdio hosts can use the `dqla_…` token shown once on checkout reveal (hold the same token for `GET /dql/account`; that route does not issue it) instead of pasting a raw `dqlk_` verify key. Remote MCP is out of scope.
 - The `dqla_` path requires DQL that accepts `X-DQL-Account` on `POST /dql/verify`. Do not publish until DQL #40 (credit-after-success) is fixed, merged, deployed, and live-tested.

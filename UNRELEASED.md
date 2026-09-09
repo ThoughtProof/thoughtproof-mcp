@@ -6,7 +6,7 @@
 
 Live Sentinel (`ALLOWED_BODY_FIELDS`) rejects a top-level `quote` with HTTP 400, so the quote is **not** sent as a sibling field. PLV provenance requires the cascade's quote to be a substring of `evidence`; omitting that span produced spurious `PROVENANCE DOWNGRADE: quote invalid or missing` even when the mandate was clear.
 
-Optional MCP/`verifyDecision` input `quote`: used only when it is a verbatim substring of `mandate`; otherwise the full mandate is the quote. DQL path unchanged. `execute` still true only on ALLOW. Published pin stays **thoughtproof-mcp@0.3.2**.
+Optional MCP/`verifyDecision` input `quote`: used only when it is an exact substring of `mandate` **and at least 20 characters** (after trim). Shorter host quotes, paraphrases, and whitespace-only mismatches fall back to the full mandate. If the host quote matches only after collapsing newlines/spaces, evidence includes a `[ThoughtProof quote]` note explaining the fallback. Empty or whitespace-only `mandate` fails closed (`MANDATE_REQUIRED`, `execute: false`) and does not call Sentinel. DQL path unchanged. `execute` still true only on ALLOW. Published pin stays **thoughtproof-mcp@0.3.2**.
 
 ## Structured objections / repair loop (unpublished tree)
 

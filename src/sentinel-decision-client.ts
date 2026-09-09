@@ -20,10 +20,27 @@ export interface SentinelDecisionInput {
   context?: string;
   /**
    * Optional host-supplied verbatim excerpt of the user mandate.
-   * Used only when it is a substring of `mandate`; otherwise the full mandate
+   * Used only when it is a substring of `mandate` and at least
+   * {@link HOST_QUOTE_MIN_CHARS} characters; otherwise the full mandate
    * is the quote. Never forwarded as a top-level Sentinel body field.
    */
   quote?: string;
+}
+
+/** Host `quote` shorter than this falls back to the full mandate. */
+export const HOST_QUOTE_MIN_CHARS = 20;
+
+export type MandateQuoteFallbackReason =
+  | "omitted"
+  | "too_short"
+  | "not_in_mandate"
+  | "whitespace_normalized_only";
+
+export interface MandateQuoteResolution {
+  /** Span embedded as the provenance quote (host excerpt or full mandate). */
+  quote: string;
+  usedHostQuote: boolean;
+  fallbackReason?: MandateQuoteFallbackReason;
 }
 
 /** Fields Sentinel /sentinel/verify accepts at body top level (strict whitelist). */
@@ -74,15 +91,63 @@ export type SentinelCallResult =
   | { ok: true; status: number; body: SentinelResponse }
   | { ok: false; status: number; error: string };
 
+/** Collapse runs of whitespace so newline/spacing drift can be detected. */
+export function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+export function isBlankMandate(mandate: unknown): boolean {
+  return String(mandate ?? "").trim().length === 0;
+}
+
 /**
  * Pick a provenance-valid quote of the user mandate.
- * Host quote wins only when it is a non-empty verbatim substring of mandate.
+ *
+ * Host `quote` is used only when:
+ *   1. it is at least {@link HOST_QUOTE_MIN_CHARS} characters after trim, and
+ *   2. it is an exact substring of the trimmed mandate.
+ *
+ * Otherwise fall back to the full mandate. If the host quote fails exact
+ * membership only because of collapsed newlines/whitespace, `fallbackReason`
+ * is `whitespace_normalized_only` (still the full mandate — Sentinel must
+ * see a verbatim mandate span).
  */
-export function resolveMandateQuote(input: Pick<SentinelDecisionInput, "mandate" | "quote">): string {
+export function resolveMandateQuote(
+  input: Pick<SentinelDecisionInput, "mandate" | "quote">,
+): MandateQuoteResolution {
   const mandate = String(input.mandate ?? "").trim();
   const quote = String(input.quote ?? "").trim();
-  if (quote && mandate.includes(quote)) return quote;
-  return mandate;
+
+  if (!quote) {
+    return { quote: mandate, usedHostQuote: false, fallbackReason: "omitted" };
+  }
+  if (quote.length < HOST_QUOTE_MIN_CHARS) {
+    return { quote: mandate, usedHostQuote: false, fallbackReason: "too_short" };
+  }
+  if (mandate.includes(quote)) {
+    return { quote, usedHostQuote: true };
+  }
+  if (collapseWhitespace(mandate).includes(collapseWhitespace(quote))) {
+    return {
+      quote: mandate,
+      usedHostQuote: false,
+      fallbackReason: "whitespace_normalized_only",
+    };
+  }
+  return { quote: mandate, usedHostQuote: false, fallbackReason: "not_in_mandate" };
+}
+
+function quoteFallbackNote(reason: MandateQuoteFallbackReason | undefined): string | undefined {
+  switch (reason) {
+    case "too_short":
+      return `[ThoughtProof quote] host quote rejected (too_short; floor is ${HOST_QUOTE_MIN_CHARS} characters); using full mandate for provenance.`;
+    case "whitespace_normalized_only":
+      return "[ThoughtProof quote] host quote matched mandate after whitespace collapse; using full mandate for provenance.";
+    case "not_in_mandate":
+      return "[ThoughtProof quote] host quote is not a substring of mandate; using full mandate for provenance.";
+    default:
+      return undefined;
+  }
 }
 
 export interface SentinelVerifyBody {
@@ -99,16 +164,21 @@ export interface SentinelVerifyBody {
  */
 export function buildSentinelEvidence(input: SentinelDecisionInput): string {
   const mandate = String(input.mandate ?? "").trim();
-  const quote = resolveMandateQuote(input);
+  const resolved = resolveMandateQuote(input);
   const parts: string[] = [];
 
-  if (quote !== mandate && mandate) {
+  const note = quoteFallbackNote(resolved.fallbackReason);
+  if (note) {
+    parts.push(note, "");
+  }
+
+  if (resolved.quote !== mandate && mandate) {
     parts.push("User mandate:", mandate, "");
   }
 
   parts.push(
     "Principal mandate (verbatim quote):",
-    quote,
+    resolved.quote,
     "",
     "Proposed action:",
     input.proposed_action,
@@ -142,6 +212,10 @@ export async function callSentinelDecision(
   const fetchImpl = cfg.fetchImpl ?? fetch;
   const url = cfg.url ?? SENTINEL_VERIFY_URL;
   const timeoutMs = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  if (isBlankMandate(input.mandate)) {
+    return { ok: false, status: 0, error: "mandate is required (empty or whitespace-only)" };
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
