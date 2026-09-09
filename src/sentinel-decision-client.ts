@@ -11,6 +11,7 @@
  */
 
 export const SENTINEL_VERIFY_URL = "https://sentinel.thoughtproof.ai/sentinel/verify";
+export const SENTINEL_OPENAPI_URL = "https://sentinel.thoughtproof.ai/openapi.json";
 export const DEFAULT_TIMEOUT_MS = 90_000;
 
 export interface SentinelDecisionInput {
@@ -43,8 +44,11 @@ export interface MandateQuoteResolution {
   fallbackReason?: MandateQuoteFallbackReason;
 }
 
-/** Fields Sentinel /sentinel/verify accepts at body top level (strict whitelist). */
-export const SENTINEL_VERIFY_BODY_FIELDS = [
+/**
+ * POST /sentinel/verify properties documented on live OpenAPI
+ * (`SENTINEL_OPENAPI_URL`). Contract tests fail if this set drifts.
+ */
+export const SENTINEL_OPENAPI_VERIFY_BODY_FIELDS = [
   "id",
   "claim",
   "evidence",
@@ -53,11 +57,43 @@ export const SENTINEL_VERIFY_BODY_FIELDS = [
   "mandate",
   "gateMode",
   "agent_context",
+] as const;
+
+/**
+ * Extra fields Sentinel's request validator accepts that public OpenAPI
+ * does not yet document. Not sent by this MCP outbound body.
+ */
+export const SENTINEL_VALIDATOR_EXTRA_BODY_FIELDS = [
   "signed_evidence",
   "key_manifest",
   "required_conditions",
   "action_hash",
 ] as const;
+
+/** Fields Sentinel /sentinel/verify accepts at body top level (strict whitelist). */
+export const SENTINEL_VERIFY_BODY_FIELDS = [
+  ...SENTINEL_OPENAPI_VERIFY_BODY_FIELDS,
+  ...SENTINEL_VALIDATOR_EXTRA_BODY_FIELDS,
+] as const;
+
+export function parseSentinelVerifyOpenApiBody(spec: unknown): {
+  properties: string[];
+  required: string[];
+} {
+  if (!spec || typeof spec !== "object") {
+    throw new Error("OpenAPI spec must be an object");
+  }
+  const schema = (spec as Record<string, any>).paths?.["/sentinel/verify"]?.post
+    ?.requestBody?.content?.["application/json"]?.schema;
+  if (!schema || typeof schema !== "object") {
+    throw new Error("OpenAPI missing POST /sentinel/verify application/json schema");
+  }
+  const properties = Object.keys(schema.properties ?? {}).sort();
+  const required = Array.isArray(schema.required)
+    ? [...schema.required].map(String).sort()
+    : [];
+  return { properties, required };
+}
 
 export interface SentinelObjection {
   step_id?: string;

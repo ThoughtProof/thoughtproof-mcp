@@ -14,6 +14,7 @@ Not published. This tree is unpublished **0.4.0-dev** and is the `dqla_` path. *
 
 ### Added
 - Sentinel-mode `verify_before_action` / `verify_decision` wires a verbatim mandate quote into `evidence` (no top-level `quote`; live Sentinel whitelist 400s that field) so PLV provenance can match. Host `quote` must be ≥20 characters and an exact substring of `mandate`; otherwise the full mandate is used. Empty/whitespace mandate fails closed (`MANDATE_REQUIRED`, `execute: false`) without calling Sentinel.
+- Contract test: outbound `/sentinel/verify` keys must be a subset of live OpenAPI (`https://sentinel.thoughtproof.ai/openapi.json`) request properties; `SENTINEL_OPENAPI_VERIFY_BODY_FIELDS` must match that documented set.
 - `verify_decision` accepts a DQL account token (`dqla_…`) via `DQL_ACCOUNT_TOKEN` or the same env as the verify key when the value starts with `dqla_`. Sent as `X-DQL-Account` only (never together with `X-DQL-Key` or `Authorization`).
 - Desktop / CLI stdio hosts can use the `dqla_…` token shown once on checkout reveal (hold the same token for `GET /dql/account`; that route does not issue it) instead of pasting a raw `dqlk_` verify key. Remote MCP is out of scope.
 - The `dqla_` path requires DQL that accepts `X-DQL-Account` on `POST /dql/verify`. Do not publish until DQL #40 (credit-after-success) is fixed, merged, deployed, and live-tested.
