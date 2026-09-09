@@ -132,6 +132,13 @@ const verifyBeforeActionSchema = {
     .string()
     .optional()
     .describe("Optional extra evidence, tool outputs, or prior turns."),
+  quote: z
+    .string()
+    .optional()
+    .describe(
+      "Optional verbatim excerpt of the user's mandate (copy the user instruction, do not paraphrase). " +
+        "Wired into Sentinel evidence for provenance. If omitted, the full mandate is used as the quote."
+    ),
   mode: z
     .enum(["dql", "sentinel", "auto"])
     .optional()
@@ -151,6 +158,7 @@ async function handleVerifyBeforeAction(args: {
   proposed_action: string;
   reasoning: string;
   context?: string;
+  quote?: string;
   mode?: "dql" | "sentinel" | "auto";
   in_reply_to?: string;
 }) {
@@ -160,6 +168,7 @@ async function handleVerifyBeforeAction(args: {
       proposed_action: args.proposed_action,
       reasoning: args.reasoning,
       context: args.context,
+      quote: args.quote,
       mode: args.mode,
       in_reply_to: args.in_reply_to,
     },

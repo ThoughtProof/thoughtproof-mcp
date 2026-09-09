@@ -1,5 +1,13 @@
 # Unpublished 0.4.0-dev
 
+## Sentinel mandate quote (unpublished tree)
+
+`verify_before_action` / `verify_decision` (mode=sentinel) now put a **verbatim quote of the user mandate** into the outbound Sentinel `evidence` blob, along with proposed action and reasoning.
+
+Live Sentinel (`ALLOWED_BODY_FIELDS`) rejects a top-level `quote` with HTTP 400, so the quote is **not** sent as a sibling field. PLV provenance requires the cascade's quote to be a substring of `evidence`; omitting that span produced spurious `PROVENANCE DOWNGRADE: quote invalid or missing` even when the mandate was clear.
+
+Optional MCP/`verifyDecision` input `quote`: used only when it is a verbatim substring of `mandate`; otherwise the full mandate is the quote. DQL path unchanged. `execute` still true only on ALLOW. Published pin stays **thoughtproof-mcp@0.3.2**.
+
 ## Structured objections / repair loop (unpublished tree)
 
 Envelope now includes `structured_objections[]` (id, code, severity `block`|`blocked_until`, claim, message, repair_hints) plus `loop` and optional `in_reply_to`. Compat: `objections: string[]` unchanged. `execute` still true only on ALLOW.

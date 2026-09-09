@@ -33,6 +33,12 @@ export interface VerifyDecisionInput {
   proposed_action: string;
   reasoning: string;
   context?: string;
+  /**
+   * Optional verbatim excerpt of the user mandate for Sentinel provenance.
+   * Ignored on the DQL path. If omitted or not a substring of mandate, the
+   * full mandate is quoted into Sentinel evidence.
+   */
+  quote?: string;
   mode?: DecisionMode;
   /** Open objection_id from a prior envelope. New call = new receipt. */
   in_reply_to?: string;

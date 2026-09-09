@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 - `verify_before_action` alias tool (same handler as `verify_decision`)
 - Pre-action gate descriptor: verify before pay/trade/write/deploy
 - Published listing pin documented as **thoughtproof-mcp@0.3.2** (separate release line)
+- Sentinel-mode verify wires a verbatim mandate quote into `evidence` (no top-level `quote`; live Sentinel whitelist 400s that field) so PLV provenance can match
 
 ## [Unreleased] / 0.4.0
 

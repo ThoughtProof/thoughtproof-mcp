@@ -13,6 +13,12 @@ import {
   verifyDecision,
   applyRepairContext,
 } from "../dist/verify-decision.js";
+import {
+  buildSentinelEvidence,
+  buildSentinelVerifyBody,
+  resolveMandateQuote,
+  SENTINEL_VERIFY_BODY_FIELDS,
+} from "../dist/sentinel-decision-client.js";
 
 // Test-only credential shapes (split so static secret scanners do not flag fixtures).
 const FIX_DQLK = "dql" + "k_" + "test";
@@ -155,6 +161,88 @@ describe("routeDecision heuristic", () => {
       }),
       "dql"
     );
+  });
+});
+
+describe("Sentinel mandate quote / provenance wiring", () => {
+  const input = {
+    mandate: "Ship the release to production only after CI is green.",
+    proposed_action: "Deploy the API to production",
+    reasoning: "CI is green; send-to-prod now",
+  };
+
+  it("uses the full mandate as the quote when the host omits quote", () => {
+    assert.equal(resolveMandateQuote(input), input.mandate);
+  });
+
+  it("accepts a host quote only when it is a verbatim substring of the mandate", () => {
+    assert.equal(
+      resolveMandateQuote({ ...input, quote: "Ship the release to production" }),
+      "Ship the release to production",
+    );
+    assert.equal(
+      resolveMandateQuote({ ...input, quote: "deploy whenever you feel like it" }),
+      input.mandate,
+    );
+  });
+
+  it("embeds the mandate quote and proposed action in evidence", () => {
+    const evidence = buildSentinelEvidence(input);
+    assert.match(evidence, /Principal mandate \(verbatim quote\):/);
+    assert.ok(evidence.includes(input.mandate));
+    assert.ok(evidence.includes(input.proposed_action));
+    assert.ok(evidence.includes(input.reasoning));
+  });
+
+  it("keeps the host quote as a contiguous evidence span", () => {
+    const excerpt = "Ship the release to production";
+    const evidence = buildSentinelEvidence({ ...input, quote: excerpt });
+    assert.ok(evidence.includes(excerpt));
+    assert.ok(evidence.includes(input.mandate));
+    assert.match(evidence, /User mandate:/);
+  });
+
+  it("does not put quote on the Sentinel body (whitelist 400)", () => {
+    const body = buildSentinelVerifyBody(input);
+    assert.equal(Object.hasOwn(body, "quote"), false);
+    assert.equal(body.mode, "action_authorization");
+    assert.equal(body.claim, input.proposed_action);
+    assert.ok(body.evidence.includes(input.mandate));
+    for (const key of Object.keys(body)) {
+      assert.ok(
+        SENTINEL_VERIFY_BODY_FIELDS.includes(key),
+        `unexpected Sentinel body field: ${key}`,
+      );
+    }
+  });
+
+  it("forwards quote into mocked Sentinel evidence on verifyDecision", async () => {
+    let captured;
+    const env = await verifyDecision(
+      {
+        mandate: input.mandate,
+        proposed_action: input.proposed_action,
+        reasoning: input.reasoning,
+        quote: "Ship the release to production",
+        mode: "sentinel",
+      },
+      {
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async (_url, init) => {
+          captured = JSON.parse(String(init.body));
+          return new Response(JSON.stringify(SENTINEL_FIXTURE), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        },
+      },
+    );
+    assert.equal(captured.mode, "action_authorization");
+    assert.equal(Object.hasOwn(captured, "quote"), false);
+    assert.ok(captured.evidence.includes("Ship the release to production"));
+    assert.ok(captured.evidence.includes(input.proposed_action));
+    assert.equal(env.surface, "sentinel");
+    assert.equal(env.execute, false);
   });
 });
 

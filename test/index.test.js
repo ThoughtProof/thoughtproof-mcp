@@ -37,6 +37,7 @@ describe("thoughtproof-mcp server", () => {
     assert.ok(props.proposed_action, "missing proposed_action property");
     assert.ok(props.reasoning, "missing reasoning property");
     assert.ok(props.context, "missing context property");
+    assert.ok(props.quote, "missing quote property");
     assert.ok(props.mode, "missing mode property");
     assert.ok(
       /must NOT put the overshoot/i.test(decision.description ?? ""),
