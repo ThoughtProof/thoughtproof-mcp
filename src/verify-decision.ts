@@ -19,6 +19,7 @@ import {
 } from "./dql-client.js";
 import {
   callSentinelDecision,
+  isBlankMandate,
   type SentinelObjection,
   type SentinelResponse,
 } from "./sentinel-decision-client.js";
@@ -33,6 +34,12 @@ export interface VerifyDecisionInput {
   proposed_action: string;
   reasoning: string;
   context?: string;
+  /**
+   * Optional verbatim excerpt of the user mandate for Sentinel provenance.
+   * Ignored on the DQL path. Used only when it is a substring of mandate and
+   * at least 20 characters; otherwise the full mandate is quoted into evidence.
+   */
+  quote?: string;
   mode?: DecisionMode;
   /** Open objection_id from a prior envelope. New call = new receipt. */
   in_reply_to?: string;
@@ -157,11 +164,12 @@ export function errorEnvelope(
   message: string,
   receipt_id = "",
   inReplyTo?: string,
+  code = "GATE_ERROR",
 ): DecisionEnvelope {
   const structured: StructuredObjection[] = [
     {
       objection_id: objectionId(receipt_id || "error", "gate"),
-      code: "GATE_ERROR",
+      code,
       severity: "block",
       claim: "verify_decision",
       message,
@@ -306,6 +314,16 @@ export async function verifyDecision(
   const inReplyTo = input.in_reply_to?.trim();
   const repaired = applyRepairContext(input);
   const surface = routeDecision(repaired);
+
+  if (isBlankMandate(repaired.mandate)) {
+    return errorEnvelope(
+      surface,
+      "mandate is required (empty or whitespace-only)",
+      "",
+      inReplyTo,
+      "MANDATE_REQUIRED",
+    );
+  }
 
   try {
     if (surface === "dql") {

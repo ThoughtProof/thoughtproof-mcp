@@ -1,5 +1,15 @@
 # Unpublished 0.4.0-dev
 
+## Sentinel mandate quote (unpublished tree)
+
+`verify_before_action` / `verify_decision` (mode=sentinel) now put a **verbatim quote of the user mandate** into the outbound Sentinel `evidence` blob, along with proposed action and reasoning.
+
+Live Sentinel (`ALLOWED_BODY_FIELDS`) rejects a top-level `quote` with HTTP 400, so the quote is **not** sent as a sibling field. PLV provenance requires the cascade's quote to be a substring of `evidence`; omitting that span produced spurious `PROVENANCE DOWNGRADE: quote invalid or missing` even when the mandate was clear.
+
+Optional MCP/`verifyDecision` input `quote`: used only when it is an exact substring of `mandate` **and at least 20 characters** (after trim). Shorter host quotes, paraphrases, and whitespace-only mismatches fall back to the full mandate. If the host quote matches only after collapsing newlines/spaces, evidence includes a `[ThoughtProof quote]` note explaining the fallback. Empty or whitespace-only `mandate` fails closed (`MANDATE_REQUIRED`, `execute: false`) and does not call Sentinel. DQL path unchanged. `execute` still true only on ALLOW. Published pin stays **thoughtproof-mcp@0.3.2**.
+
+Contract test (`test/sentinel-openapi-contract.test.js`) fetches live `openapi.json` and fails if outbound body keys are not a subset of documented `POST /sentinel/verify` properties, or if `SENTINEL_OPENAPI_VERIFY_BODY_FIELDS` drifts from that set. No top-level `quote`. Does not POST `/sentinel/verify`.
+
 ## Structured objections / repair loop (unpublished tree)
 
 Envelope now includes `structured_objections[]` (id, code, severity `block`|`blocked_until`, claim, message, repair_hints) plus `loop` and optional `in_reply_to`. Compat: `objections: string[]` unchanged. `execute` still true only on ALLOW.
