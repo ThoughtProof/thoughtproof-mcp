@@ -14,6 +14,17 @@ export const SENTINEL_VERIFY_URL = "https://sentinel.thoughtproof.ai/sentinel/ve
 export const SENTINEL_OPENAPI_URL = "https://sentinel.thoughtproof.ai/openapi.json";
 export const DEFAULT_TIMEOUT_MS = 90_000;
 
+/** Sentinel ActionKind — host-declared `mandate.kind` / `action.kind` (issue #21 / Sentinel #51). */
+export const ACTION_KINDS = [
+  "informational",
+  "value_transfer",
+  "permission",
+  "deploy_ship",
+  "unknown",
+] as const;
+
+export type ActionKind = (typeof ACTION_KINDS)[number];
+
 export interface SentinelDecisionInput {
   mandate: string;
   proposed_action: string;
@@ -26,6 +37,17 @@ export interface SentinelDecisionInput {
    * is the quote. Never forwarded as a top-level Sentinel body field.
    */
   quote?: string;
+  /**
+   * Optional host-declared Sentinel ActionKind for the mandate
+   * (`mandate.kind`). Omit rather than guess. Invalid values are not
+   * rewritten to a nearby kind.
+   */
+  mandate_kind?: ActionKind | string;
+  /**
+   * Optional host-declared Sentinel ActionKind for the proposed action
+   * (`action.kind`). Omit rather than guess.
+   */
+  action_kind?: ActionKind | string;
 }
 
 /** Host `quote` shorter than this falls back to the full mandate. */
@@ -136,6 +158,66 @@ export function isBlankMandate(mandate: unknown): boolean {
   return String(mandate ?? "").trim().length === 0;
 }
 
+export function isActionKind(value: unknown): value is ActionKind {
+  return typeof value === "string" && (ACTION_KINDS as readonly string[]).includes(value);
+}
+
+/** Accept a host kind only when it is an exact ActionKind after trim. */
+export function parseActionKind(value: unknown): ActionKind | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return isActionKind(trimmed) ? trimmed : undefined;
+}
+
+/**
+ * Non-empty host kind that is not a valid ActionKind.
+ * Empty / omitted is not an error (undeclared).
+ */
+export function invalidHostKindReason(
+  field: "mandate_kind" | "action_kind",
+  value: unknown,
+): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === "string" && value.trim().length === 0) return undefined;
+  if (parseActionKind(value)) return undefined;
+  const shown = typeof value === "string" ? value.trim() : typeof value;
+  return `${field} must be one of ${ACTION_KINDS.join(" | ")} (got ${shown})`;
+}
+
+export function resolveHostDeclaredKinds(
+  input: Pick<SentinelDecisionInput, "mandate_kind" | "action_kind">,
+): HostDeclaredKinds {
+  const out: HostDeclaredKinds = {};
+  const mandateKind = parseActionKind(input.mandate_kind);
+  const actionKind = parseActionKind(input.action_kind);
+  if (mandateKind) out["mandate.kind"] = mandateKind;
+  if (actionKind) out["action.kind"] = actionKind;
+  return out;
+}
+
+/**
+ * Cascade claim for `mode=action_authorization`.
+ * Must assert authorization — never echo `proposed_action` alone
+ * (thoughtproof-mcp#21 / Sentinel #36).
+ */
+export function buildActionAuthorizationClaim(proposedAction: string): string {
+  const action = String(proposedAction ?? "").trim();
+  return `${action}${ACTION_AUTHORIZATION_CLAIM_SUFFIX}`;
+}
+
+function hostDeclaredKindsEvidenceBlock(
+  input: Pick<SentinelDecisionInput, "mandate_kind" | "action_kind">,
+): string | undefined {
+  const kinds = resolveHostDeclaredKinds(input);
+  const lines: string[] = [];
+  if (kinds["mandate.kind"]) lines.push(`mandate.kind: ${kinds["mandate.kind"]}`);
+  if (kinds["action.kind"]) lines.push(`action.kind: ${kinds["action.kind"]}`);
+  if (lines.length === 0) return undefined;
+  return [HOST_DECLARED_KINDS_LABEL, ...lines].join("\n");
+}
+
 /**
  * Pick a provenance-valid quote of the user mandate.
  *
@@ -186,11 +268,36 @@ function quoteFallbackNote(reason: MandateQuoteFallbackReason | undefined): stri
   }
 }
 
+/**
+ * Evidence label for host-declared kinds. Sentinel #51 should prefer these
+ * over prose classification. Placed after mandate/action/reasoning so
+ * `splitActionAuthEvidence` does not fold them into those spans.
+ * Never uses `structural_fact:` (Sentinel redacts that prefix).
+ */
+export const HOST_DECLARED_KINDS_LABEL = "Host-declared kinds:";
+
+/** Suffix that turns proposed_action into an authorization assertion. */
+export const ACTION_AUTHORIZATION_CLAIM_SUFFIX =
+  " is authorized by the principal's mandate";
+
+export interface HostDeclaredKinds {
+  "mandate.kind"?: ActionKind;
+  "action.kind"?: ActionKind;
+}
+
 export interface SentinelVerifyBody {
   claim: string;
   evidence: string;
   mode: "action_authorization";
   tier: "checkpoint" | "standard";
+  /**
+   * Present only when the host declared `mandate.kind`. Live OpenAPI already
+   * allows top-level `mandate` (AuthorizationMandate). `kind` is the #51
+   * extension; live financial-gate fields (`granted` / `action`) are omitted
+   * unless a later MCP slice adds them. `action.kind` is evidence-only —
+   * a top-level `action` field is not on the live whitelist.
+   */
+  mandate?: { kind: ActionKind };
 }
 
 /**
@@ -225,6 +332,10 @@ export function buildSentinelEvidence(input: SentinelDecisionInput): string {
   if (input.context) {
     parts.push("", "Context:", input.context);
   }
+  const kindsBlock = hostDeclaredKindsEvidenceBlock(input);
+  if (kindsBlock) {
+    parts.push("", kindsBlock);
+  }
   return parts.join("\n");
 }
 
@@ -233,12 +344,17 @@ export function buildSentinelVerifyBody(
   input: SentinelDecisionInput,
   tier: "checkpoint" | "standard" = "checkpoint",
 ): SentinelVerifyBody {
-  return {
-    claim: input.proposed_action,
+  const kinds = resolveHostDeclaredKinds(input);
+  const body: SentinelVerifyBody = {
+    claim: buildActionAuthorizationClaim(input.proposed_action),
     evidence: buildSentinelEvidence(input),
     mode: "action_authorization",
     tier,
   };
+  if (kinds["mandate.kind"]) {
+    body.mandate = { kind: kinds["mandate.kind"] };
+  }
+  return body;
 }
 
 export async function callSentinelDecision(

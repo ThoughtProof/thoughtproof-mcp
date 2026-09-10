@@ -25,6 +25,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { resolveDqlCredential } from "./dql-client.js";
 import { verifyTrade, PaymentRequiredError } from "./verify-client.js";
+import { ACTION_KINDS } from "./sentinel-decision-client.js";
 import { verifyDecision } from "./verify-decision.js";
 import { defaultPayToFallback, parseX402PaymentRequired } from "./x402-challenge.js";
 
@@ -109,6 +110,8 @@ const VERIFY_BEFORE_ACTION_DESCRIPTION =
   "Camera mandate: you must NOT put the overshoot or constraint violation in proposed_action or reasoning " +
   '(for example, do not write "price is above the cap"). Put the user goal in mandate, the action you are about to take ' +
   "in proposed_action, and your plan in reasoning — the verifier must find the mismatch. " +
+  "Optional mandate_kind / action_kind declare Sentinel ActionKind " +
+  "(informational | value_transfer | permission | deploy_ship | unknown) — omit rather than guess. " +
   "Replan = new call = new receipt. Aliases: verify_decision, verify_before_action, verify_before_act.";
 
 const verifyBeforeActionSchema = {
@@ -140,6 +143,22 @@ const verifyBeforeActionSchema = {
         "Wired into Sentinel evidence for provenance. Must be at least 20 characters and an exact " +
         "substring of mandate; otherwise the full mandate is used as the quote."
     ),
+  mandate_kind: z
+    .enum(ACTION_KINDS)
+    .optional()
+    .describe(
+      "Optional host-declared Sentinel ActionKind for the mandate (mandate.kind). " +
+        "Values: informational | value_transfer | permission | deploy_ship | unknown. " +
+        "Sentinel prefers this over prose classification. Omit rather than guess."
+    ),
+  action_kind: z
+    .enum(ACTION_KINDS)
+    .optional()
+    .describe(
+      "Optional host-declared Sentinel ActionKind for the proposed action (action.kind). " +
+        "Values: informational | value_transfer | permission | deploy_ship | unknown. " +
+        "Sentinel prefers this over prose classification. Omit rather than guess."
+    ),
   mode: z
     .enum(["dql", "sentinel", "auto"])
     .optional()
@@ -160,6 +179,8 @@ async function handleVerifyBeforeAction(args: {
   reasoning: string;
   context?: string;
   quote?: string;
+  mandate_kind?: (typeof ACTION_KINDS)[number];
+  action_kind?: (typeof ACTION_KINDS)[number];
   mode?: "dql" | "sentinel" | "auto";
   in_reply_to?: string;
 }) {
@@ -170,6 +191,8 @@ async function handleVerifyBeforeAction(args: {
       reasoning: args.reasoning,
       context: args.context,
       quote: args.quote,
+      mandate_kind: args.mandate_kind,
+      action_kind: args.action_kind,
       mode: args.mode,
       in_reply_to: args.in_reply_to,
     },
