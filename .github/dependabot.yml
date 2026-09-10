@@ -8,10 +8,14 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+    # Groups only filter which updates share a PR. They do not suppress
+    # ungrouped updates — #22 left majors opening individually (#26
+    # @types/node 26, #27 typescript 7, #28 zod 4). Ignore majors so
+    # Dependabot does not recreate them.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
-      # Group only non-breaking bumps. Semver-majors stay ungrouped so a
-      # breaking change (e.g. zod 3→4 in #14) is not bundled with a minor
-      # (e.g. @modelcontextprotocol/sdk 1.29→1.30).
       production-deps:
         dependency-type: production
         update-types:
