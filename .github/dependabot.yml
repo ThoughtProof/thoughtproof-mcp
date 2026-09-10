@@ -9,10 +9,19 @@ updates:
     labels:
       - dependencies
     groups:
+      # Group only non-breaking bumps. Semver-majors stay ungrouped so a
+      # breaking change (e.g. zod 3→4 in #14) is not bundled with a minor
+      # (e.g. @modelcontextprotocol/sdk 1.29→1.30).
       production-deps:
         dependency-type: production
+        update-types:
+          - "minor"
+          - "patch"
       dev-deps:
         dependency-type: development
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: github-actions
     directory: "/"
