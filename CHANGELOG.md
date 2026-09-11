@@ -7,12 +7,17 @@ All notable changes to this project will be documented in this file.
 - `verify_before_action` alias tool (same handler as `verify_decision`)
 - Pre-action gate descriptor: verify before pay/trade/write/deploy
 - Published listing pin documented as **thoughtproof-mcp@0.3.2** (separate release line)
+- Claim framing + optional `mandate_kind` / `action_kind` (issue #21 / Sentinel #51). No npm publish.
 
 ## [Unreleased] / 0.4.0
 
 Not published. This tree is unpublished **0.4.0-dev** and is the `dqla_` path. **0.3.1** is reserved for the metadata-only listing tarball cut from the real **0.3.0** tree (`d70470b`) and is not the `dqla_` path. **0.3.0** on npm is also not the `dqla_` path.
 
 ### Added
+- Host-declared kinds: send nested `mandate.action.kind` (not evidence prose). Removes structural_fact-class asymmetry for `action.kind` (review CR on #30).
+- Sentinel-mode `verify_before_action` / `verify_decision` claim is an authorization assertion (`"<proposed_action> is authorized by the principal's mandate"`), not an echo of `proposed_action` (issue #21). Cascade scores authorization, not restatement.
+- Optional host-declared `mandate_kind` / `action_kind` on the hero tools (`informational` | `value_transfer` | `permission` | `deploy_ship` | `unknown`). Wired as `mandate.kind` / `action.kind` in Sentinel evidence (and `mandate.kind` on the live-allowed top-level `mandate` object when declared). Omit rather than guess; invalid values fail closed (`HOST_KIND_INVALID`) without calling Sentinel. Companion to Sentinel #51.
+- Regression: ship/npm/deploy mandate + notify-only action must not use `claim === proposed_action` (the agreement_allow fail-open shape) and stays on the not-allow path unless Sentinel returns native ALLOW.
 - Sentinel-mode `verify_before_action` / `verify_decision` wires a verbatim mandate quote into `evidence` (no top-level `quote`; live Sentinel whitelist 400s that field) so PLV provenance can match. Host `quote` must be ≥20 characters and an exact substring of `mandate`; otherwise the full mandate is used. Empty/whitespace mandate fails closed (`MANDATE_REQUIRED`, `execute: false`) without calling Sentinel.
 - Contract test: outbound `/sentinel/verify` keys must be a subset of live OpenAPI (`https://sentinel.thoughtproof.ai/openapi.json`) request properties; `SENTINEL_OPENAPI_VERIFY_BODY_FIELDS` must match that documented set.
 - `verify_decision` accepts a DQL account token (`dqla_…`) via `DQL_ACCOUNT_TOKEN` or the same env as the verify key when the value starts with `dqla_`. Sent as `X-DQL-Account` only (never together with `X-DQL-Key` or `Authorization`).

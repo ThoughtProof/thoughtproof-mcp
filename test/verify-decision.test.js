@@ -14,9 +14,16 @@ import {
   applyRepairContext,
 } from "../dist/verify-decision.js";
 import {
+  ACTION_AUTHORIZATION_CLAIM_SUFFIX,
+  ACTION_KINDS,
+  buildActionAuthorizationClaim,
   buildSentinelEvidence,
   buildSentinelVerifyBody,
+  HOST_DECLARED_KINDS_LABEL,
   HOST_QUOTE_MIN_CHARS,
+  invalidHostKindReason,
+  parseActionKind,
+  resolveHostDeclaredKinds,
   resolveMandateQuote,
   SENTINEL_VERIFY_BODY_FIELDS,
 } from "../dist/sentinel-decision-client.js";
@@ -246,7 +253,8 @@ describe("Sentinel mandate quote / provenance wiring", () => {
     const body = buildSentinelVerifyBody(input);
     assert.equal(Object.hasOwn(body, "quote"), false);
     assert.equal(body.mode, "action_authorization");
-    assert.equal(body.claim, input.proposed_action);
+    assert.equal(body.claim, buildActionAuthorizationClaim(input.proposed_action));
+    assert.notEqual(body.claim, input.proposed_action);
     assert.ok(body.evidence.includes(input.mandate));
     for (const key of Object.keys(body)) {
       assert.ok(
@@ -309,6 +317,204 @@ describe("Sentinel mandate quote / provenance wiring", () => {
     assert.equal(env.surface, "sentinel");
     assert.equal(env.structured_objections[0].code, "MANDATE_REQUIRED");
     assert.match(env.objections.join(" "), /mandate is required/);
+  });
+});
+
+describe("action_authorization claim framing (mcp#21)", () => {
+  it("asserts authorization instead of echoing proposed_action", () => {
+    const action = "Notify CoS that CI is green";
+    const claim = buildActionAuthorizationClaim(action);
+    assert.equal(claim, `${action}${ACTION_AUTHORIZATION_CLAIM_SUFFIX}`);
+    assert.match(claim, /is authorized by the principal's mandate$/);
+    assert.notEqual(claim, action);
+    assert.ok(claim.startsWith(action));
+  });
+
+  it("trims proposed_action in the claim", () => {
+    assert.equal(
+      buildActionAuthorizationClaim("  Deploy the API  "),
+      `Deploy the API${ACTION_AUTHORIZATION_CLAIM_SUFFIX}`,
+    );
+  });
+});
+
+describe("host-declared mandate.kind / action.kind (Sentinel #51 wire)", () => {
+  const shipNotify = {
+    mandate: "Ship the release: deploy to production and pin npm after CI is green.",
+    proposed_action: "Notify CoS that CI is green. Do not deploy, publish, or pin npm.",
+    reasoning: "Status ping only — FYI to the principal.",
+  };
+
+  it("parses ActionKind strictly and leaves empty/unknown-shape undeclared", () => {
+    assert.deepEqual([...ACTION_KINDS], [
+      "informational",
+      "value_transfer",
+      "permission",
+      "deploy_ship",
+      "unknown",
+    ]);
+    assert.equal(parseActionKind("deploy_ship"), "deploy_ship");
+    assert.equal(parseActionKind("  informational  "), "informational");
+    assert.equal(parseActionKind("unknown"), "unknown");
+    assert.equal(parseActionKind(""), undefined);
+    assert.equal(parseActionKind("ship"), undefined);
+    assert.equal(parseActionKind("DEPLOY_SHIP"), undefined);
+    assert.match(invalidHostKindReason("mandate_kind", "ship") ?? "", /mandate_kind/);
+    assert.equal(invalidHostKindReason("action_kind", "informational"), undefined);
+    assert.equal(invalidHostKindReason("action_kind", "  "), undefined);
+  });
+
+  it("does not invent host-declared kinds when the host omits them", () => {
+    const kinds = resolveHostDeclaredKinds(shipNotify);
+    assert.deepEqual(kinds, {});
+    const evidence = buildSentinelEvidence(shipNotify);
+    assert.equal(evidence.includes(HOST_DECLARED_KINDS_LABEL), false);
+    assert.equal(evidence.includes("mandate.kind:"), false);
+    assert.equal(evidence.includes("action.kind:"), false);
+    const body = buildSentinelVerifyBody(shipNotify);
+    assert.equal(Object.hasOwn(body, "mandate"), false);
+  });
+
+  it("passes explicit kinds on mandate.kind + nested mandate.action.kind (no evidence echo)", () => {
+    const input = {
+      ...shipNotify,
+      mandate_kind: "deploy_ship",
+      action_kind: "informational",
+    };
+    const kinds = resolveHostDeclaredKinds(input);
+    assert.deepEqual(kinds, {
+      "mandate.kind": "deploy_ship",
+      "action.kind": "informational",
+    });
+    const body = buildSentinelVerifyBody(input);
+    assert.equal(body.mandate?.kind, "deploy_ship");
+    assert.equal(body.mandate?.action?.kind, "informational");
+    // Deterministic gate path only — never structural_fact-class prose.
+    assert.equal(body.evidence.includes(HOST_DECLARED_KINDS_LABEL), false);
+    assert.doesNotMatch(body.evidence, /mandate\.kind:\s*deploy_ship/);
+    assert.doesNotMatch(body.evidence, /action\.kind:\s*informational/);
+    assert.ok(body.evidence.includes(shipNotify.proposed_action));
+    for (const key of Object.keys(body)) {
+      assert.ok(
+        SENTINEL_VERIFY_BODY_FIELDS.includes(key),
+        `unexpected Sentinel body field: ${key}`,
+      );
+    }
+  });
+
+  it("does not treat inferred ship/notify prose as host-declared kinds", () => {
+    const body = buildSentinelVerifyBody(shipNotify);
+    assert.doesNotMatch(body.evidence, /mandate\.kind:\s*informational/);
+    assert.doesNotMatch(body.evidence, /action\.kind:\s*informational/);
+    assert.doesNotMatch(body.evidence, /mandate\.kind:\s*deploy_ship/);
+  });
+});
+
+describe("ship/npm/deploy mandate + notify-only action (agreement_allow regression)", () => {
+  const shipNotify = {
+    mandate: "Ship the release: deploy to production and pin npm thoughtproof-mcp after CI is green.",
+    proposed_action: "Notify CoS that CI is green. Do not deploy, publish, or pin npm.",
+    reasoning: "FYI status ping only — no ship.",
+    mode: "sentinel",
+  };
+
+  it("outbound claim is an authorization assertion, not the notify restatement", () => {
+    const body = buildSentinelVerifyBody(shipNotify);
+    assert.notEqual(body.claim, shipNotify.proposed_action);
+    assert.equal(body.claim, buildActionAuthorizationClaim(shipNotify.proposed_action));
+    assert.match(body.claim, /is authorized by the principal's mandate$/);
+    assert.ok(body.claim.includes(shipNotify.proposed_action));
+    assert.equal(body.mode, "action_authorization");
+  });
+
+  it("stays on the not-allow path when Sentinel does not native-ALLOW", async () => {
+    let captured;
+    const env = await verifyDecision(
+      {
+        ...shipNotify,
+        mandate_kind: "deploy_ship",
+        action_kind: "informational",
+      },
+      {
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async (_url, init) => {
+          captured = JSON.parse(String(init.body));
+          return new Response(
+            JSON.stringify({
+              ...SENTINEL_FIXTURE,
+              verdict: "BLOCK",
+              reasoning: "objective_mismatch_fail_closed",
+              meta: {
+                promotion: {
+                  public_verdict: "BLOCK",
+                  reason: "objective_mismatch_fail_closed",
+                  action_kind: "informational",
+                  mandate_kind: "deploy_ship",
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        },
+      },
+    );
+    assert.notEqual(captured.claim, shipNotify.proposed_action);
+    assert.match(captured.claim, /is authorized by the principal's mandate$/);
+    assert.equal(captured.mandate.kind, "deploy_ship");
+    assert.equal(captured.mandate.action.kind, "informational");
+    assert.doesNotMatch(captured.evidence, /action\.kind:\s*informational/);
+    assert.doesNotMatch(captured.evidence, /Host-declared kinds:/);
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.equal(env.surface, "sentinel");
+  });
+
+  it("does not treat a mocked agreement_allow ALLOW as a local promotion skip — execute follows native verdict only", async () => {
+    const env = await verifyDecision(shipNotify, {
+      sentinelApiKey: FIX_SENTINEL_UNUSED,
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            ...SENTINEL_FIXTURE,
+            verdict: "UNCERTAIN",
+            reasoning: "unclassified_abstention_fail_closed",
+            meta: {
+              promotion: {
+                public_verdict: "UNCERTAIN",
+                reason: "unclassified_abstention_fail_closed",
+                cascade_reason: "agreement_allow",
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    });
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.match(env.recommendation, /do not execute/);
+  });
+
+  it("fails closed on an invalid host kind without calling Sentinel", async () => {
+    let called = 0;
+    const env = await verifyDecision(
+      {
+        ...shipNotify,
+        mandate_kind: "ship",
+        action_kind: "informational",
+      },
+      {
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async () => {
+          called += 1;
+          throw new Error("should not fetch");
+        },
+      },
+    );
+    assert.equal(called, 0);
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.equal(env.structured_objections[0].code, "HOST_KIND_INVALID");
+    assert.match(env.objections.join(" "), /mandate_kind/);
   });
 });
 

@@ -1,5 +1,25 @@
 # Unpublished 0.4.0-dev
 
+## Claim framing + host-declared kinds (unpublished tree)
+
+`verify_before_action` / `verify_decision` (Sentinel `mode=action_authorization`) now set `claim` to **`"<proposed_action> is authorized by the principal's mandate"`** so the cascade scores authorization, not a restatement of the action (issue #21 / Sentinel #36).
+
+Optional MCP fields **`mandate_kind`** / **`action_kind`** (`informational` | `value_transfer` | `permission` | `deploy_ship` | `unknown`) are the host encoding of Sentinel #51 `mandate.kind` / `action.kind`. They are **not inferred** when omitted — prefer explicit params over a silent wrong guess. Invalid values fail closed (`HOST_KIND_INVALID`, `execute: false`) and do not call Sentinel.
+
+Wire format (live-safe; no new top-level fields outside OpenAPI):
+
+- `claim` — authorization assertion (never `proposed_action` alone)
+- `evidence` — mandate/action/reasoning spans only. **No** host-declared kinds in evidence (avoids structural_fact-class asymmetry).
+- `mandate` — when either kind is declared:
+
+```json
+{ "mandate": { "kind": "deploy_ship", "action": { "kind": "informational" } } }
+```
+
+  Sentinel #51/#60 reads `mandate.kind` and nested `mandate.action.kind` (MCP `action_kind` maps to the latter). Top-level `action` is not on the live whitelist.
+
+Ship/npm/deploy mandate + notify-only action must not ALLOW via `agreement_allow` from a tautological claim. MCP still sets `execute: true` only on native `ALLOW`. Published pin stays **thoughtproof-mcp@0.3.2**. No npm publish of this tree.
+
 ## Sentinel mandate quote (unpublished tree)
 
 `verify_before_action` / `verify_decision` (mode=sentinel) now put a **verbatim quote of the user mandate** into the outbound Sentinel `evidence` blob, along with proposed action and reasoning.

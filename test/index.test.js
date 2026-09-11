@@ -38,6 +38,16 @@ describe("thoughtproof-mcp server", () => {
     assert.ok(props.reasoning, "missing reasoning property");
     assert.ok(props.context, "missing context property");
     assert.ok(props.quote, "missing quote property");
+    assert.ok(props.mandate_kind, "missing mandate_kind property");
+    assert.ok(props.action_kind, "missing action_kind property");
+    assert.deepEqual(props.mandate_kind.enum, [
+      "informational",
+      "value_transfer",
+      "permission",
+      "deploy_ship",
+      "unknown",
+    ]);
+    assert.deepEqual(props.action_kind.enum, props.mandate_kind.enum);
     assert.ok(props.mode, "missing mode property");
     assert.ok(
       /must NOT put the overshoot/i.test(decision.description ?? ""),

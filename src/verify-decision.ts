@@ -19,7 +19,9 @@ import {
 } from "./dql-client.js";
 import {
   callSentinelDecision,
+  invalidHostKindReason,
   isBlankMandate,
+  type ActionKind,
   type SentinelObjection,
   type SentinelResponse,
 } from "./sentinel-decision-client.js";
@@ -40,6 +42,16 @@ export interface VerifyDecisionInput {
    * at least 20 characters; otherwise the full mandate is quoted into evidence.
    */
   quote?: string;
+  /**
+   * Optional host-declared Sentinel ActionKind (`mandate.kind`).
+   * Omit rather than guess. Invalid values fail closed (HOST_KIND_INVALID).
+   */
+  mandate_kind?: ActionKind | string;
+  /**
+   * Optional host-declared Sentinel ActionKind (`action.kind`).
+   * Omit rather than guess. Invalid values fail closed (HOST_KIND_INVALID).
+   */
+  action_kind?: ActionKind | string;
   mode?: DecisionMode;
   /** Open objection_id from a prior envelope. New call = new receipt. */
   in_reply_to?: string;
@@ -323,6 +335,13 @@ export async function verifyDecision(
       inReplyTo,
       "MANDATE_REQUIRED",
     );
+  }
+
+  const kindError =
+    invalidHostKindReason("mandate_kind", repaired.mandate_kind) ??
+    invalidHostKindReason("action_kind", repaired.action_kind);
+  if (kindError) {
+    return errorEnvelope(surface, kindError, "", inReplyTo, "HOST_KIND_INVALID");
   }
 
   try {

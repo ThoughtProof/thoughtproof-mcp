@@ -6,6 +6,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildActionAuthorizationClaim,
   buildSentinelVerifyBody,
   parseSentinelVerifyOpenApiBody,
   SENTINEL_OPENAPI_URL,
@@ -69,6 +70,8 @@ describe("Sentinel OpenAPI contract", () => {
     const body = buildSentinelVerifyBody(SAMPLE);
     const outbound = Object.keys(body).sort();
     assert.equal(Object.hasOwn(body, "quote"), false);
+    assert.equal(body.claim, buildActionAuthorizationClaim(SAMPLE.proposed_action));
+    assert.notEqual(body.claim, SAMPLE.proposed_action);
     for (const key of outbound) {
       assert.ok(
         documented.has(key),
@@ -83,6 +86,21 @@ describe("Sentinel OpenAPI contract", () => {
       assert.ok(
         Object.hasOwn(body, field),
         `outbound body missing OpenAPI-required field "${field}"`,
+      );
+    }
+
+    const withKinds = buildSentinelVerifyBody({
+      ...SAMPLE,
+      mandate_kind: "deploy_ship",
+      action_kind: "informational",
+    });
+    assert.equal(withKinds.mandate.kind, "deploy_ship");
+    assert.equal(withKinds.mandate.action.kind, "informational");
+    assert.doesNotMatch(withKinds.evidence, /Host-declared kinds:/);
+    for (const key of Object.keys(withKinds)) {
+      assert.ok(
+        documented.has(key),
+        `host-kind outbound field "${key}" is not in live OpenAPI`,
       );
     }
   });
