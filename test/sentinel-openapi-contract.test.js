@@ -95,6 +95,8 @@ describe("Sentinel OpenAPI contract", () => {
       action_kind: "informational",
     });
     assert.equal(withKinds.mandate.kind, "deploy_ship");
+    assert.equal(withKinds.mandate.action.kind, "informational");
+    assert.doesNotMatch(withKinds.evidence, /Host-declared kinds:/);
     for (const key of Object.keys(withKinds)) {
       assert.ok(
         documented.has(key),

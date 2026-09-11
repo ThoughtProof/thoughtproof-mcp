@@ -375,7 +375,7 @@ describe("host-declared mandate.kind / action.kind (Sentinel #51 wire)", () => {
     assert.equal(Object.hasOwn(body, "mandate"), false);
   });
 
-  it("passes explicit kinds through evidence and top-level mandate.kind", () => {
+  it("passes explicit kinds on mandate.kind + nested mandate.action.kind (no evidence echo)", () => {
     const input = {
       ...shipNotify,
       mandate_kind: "deploy_ship",
@@ -388,14 +388,12 @@ describe("host-declared mandate.kind / action.kind (Sentinel #51 wire)", () => {
     });
     const body = buildSentinelVerifyBody(input);
     assert.equal(body.mandate?.kind, "deploy_ship");
-    assert.match(body.evidence, /Host-declared kinds:/);
-    assert.match(body.evidence, /mandate\.kind: deploy_ship/);
-    assert.match(body.evidence, /action\.kind: informational/);
+    assert.equal(body.mandate?.action?.kind, "informational");
+    // Deterministic gate path only — never structural_fact-class prose.
+    assert.equal(body.evidence.includes(HOST_DECLARED_KINDS_LABEL), false);
+    assert.doesNotMatch(body.evidence, /mandate\.kind:\s*deploy_ship/);
+    assert.doesNotMatch(body.evidence, /action\.kind:\s*informational/);
     assert.ok(body.evidence.includes(shipNotify.proposed_action));
-    assert.ok(
-      body.evidence.indexOf("Proposed action:") <
-        body.evidence.indexOf(HOST_DECLARED_KINDS_LABEL),
-    );
     for (const key of Object.keys(body)) {
       assert.ok(
         SENTINEL_VERIFY_BODY_FIELDS.includes(key),
@@ -463,7 +461,9 @@ describe("ship/npm/deploy mandate + notify-only action (agreement_allow regressi
     assert.notEqual(captured.claim, shipNotify.proposed_action);
     assert.match(captured.claim, /is authorized by the principal's mandate$/);
     assert.equal(captured.mandate.kind, "deploy_ship");
-    assert.match(captured.evidence, /action\.kind: informational/);
+    assert.equal(captured.mandate.action.kind, "informational");
+    assert.doesNotMatch(captured.evidence, /action\.kind:\s*informational/);
+    assert.doesNotMatch(captured.evidence, /Host-declared kinds:/);
     assert.equal(env.execute, false);
     assert.notEqual(env.verdict, "ALLOW");
     assert.equal(env.surface, "sentinel");

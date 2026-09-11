@@ -9,15 +9,14 @@ Optional MCP fields **`mandate_kind`** / **`action_kind`** (`informational` | `v
 Wire format (live-safe; no new top-level fields outside OpenAPI):
 
 - `claim` — authorization assertion (never `proposed_action` alone)
-- `evidence` — existing mandate/action/reasoning spans, then when declared:
+- `evidence` — mandate/action/reasoning spans only. **No** host-declared kinds in evidence (avoids structural_fact-class asymmetry).
+- `mandate` — when either kind is declared:
 
-```
-Host-declared kinds:
-mandate.kind: deploy_ship
-action.kind: informational
+```json
+{ "mandate": { "kind": "deploy_ship", "action": { "kind": "informational" } } }
 ```
 
-- `mandate.kind` — also sent as top-level `{ "mandate": { "kind": "<ActionKind>" } }` when `mandate_kind` is declared (`mandate` is already on live OpenAPI). `action.kind` is evidence-only (top-level `action` is not on the live whitelist).
+  Sentinel #51/#60 reads `mandate.kind` and nested `mandate.action.kind` (MCP `action_kind` maps to the latter). Top-level `action` is not on the live whitelist.
 
 Ship/npm/deploy mandate + notify-only action must not ALLOW via `agreement_allow` from a tautological claim. MCP still sets `execute: true` only on native `ALLOW`. Published pin stays **thoughtproof-mcp@0.3.2**. No npm publish of this tree.
 

@@ -207,17 +207,6 @@ export function buildActionAuthorizationClaim(proposedAction: string): string {
   return `${action}${ACTION_AUTHORIZATION_CLAIM_SUFFIX}`;
 }
 
-function hostDeclaredKindsEvidenceBlock(
-  input: Pick<SentinelDecisionInput, "mandate_kind" | "action_kind">,
-): string | undefined {
-  const kinds = resolveHostDeclaredKinds(input);
-  const lines: string[] = [];
-  if (kinds["mandate.kind"]) lines.push(`mandate.kind: ${kinds["mandate.kind"]}`);
-  if (kinds["action.kind"]) lines.push(`action.kind: ${kinds["action.kind"]}`);
-  if (lines.length === 0) return undefined;
-  return [HOST_DECLARED_KINDS_LABEL, ...lines].join("\n");
-}
-
 /**
  * Pick a provenance-valid quote of the user mandate.
  *
@@ -269,10 +258,9 @@ function quoteFallbackNote(reason: MandateQuoteFallbackReason | undefined): stri
 }
 
 /**
- * Evidence label for host-declared kinds. Sentinel #51 should prefer these
- * over prose classification. Placed after mandate/action/reasoning so
- * `splitActionAuthEvidence` does not fold them into those spans.
- * Never uses `structural_fact:` (Sentinel redacts that prefix).
+ * @deprecated Evidence must not carry host-declared kinds (structural_fact-
+ * class asymmetry). Kept as a constant only so older tests/imports fail
+ * closed if they still search for the label — production evidence omits it.
  */
 export const HOST_DECLARED_KINDS_LABEL = "Host-declared kinds:";
 
@@ -291,13 +279,16 @@ export interface SentinelVerifyBody {
   mode: "action_authorization";
   tier: "checkpoint" | "standard";
   /**
-   * Present only when the host declared `mandate.kind`. Live OpenAPI already
-   * allows top-level `mandate` (AuthorizationMandate). `kind` is the #51
-   * extension; live financial-gate fields (`granted` / `action`) are omitted
-   * unless a later MCP slice adds them. `action.kind` is evidence-only —
-   * a top-level `action` field is not on the live whitelist.
+   * Present when the host declared `mandate.kind` and/or `action.kind`.
+   * Live OpenAPI already allows top-level `mandate` (AuthorizationMandate).
+   * Sentinel #51/#60 reads `mandate.kind` and nested `mandate.action.kind`
+   * (MCP `action.kind` maps onto the latter). No top-level `action` field —
+   * that is not on the live whitelist. Kinds are never echoed into evidence.
    */
-  mandate?: { kind: ActionKind };
+  mandate?: {
+    kind?: ActionKind;
+    action?: { kind: ActionKind };
+  };
 }
 
 /**
@@ -332,10 +323,8 @@ export function buildSentinelEvidence(input: SentinelDecisionInput): string {
   if (input.context) {
     parts.push("", "Context:", input.context);
   }
-  const kindsBlock = hostDeclaredKindsEvidenceBlock(input);
-  if (kindsBlock) {
-    parts.push("", kindsBlock);
-  }
+  // Host-declared kinds go on mandate.{kind,action.kind} only — never as
+  // evidence prose (same asymmetry class as structural_fact / #34).
   return parts.join("\n");
 }
 
@@ -351,8 +340,15 @@ export function buildSentinelVerifyBody(
     mode: "action_authorization",
     tier,
   };
-  if (kinds["mandate.kind"]) {
-    body.mandate = { kind: kinds["mandate.kind"] };
+  if (kinds["mandate.kind"] || kinds["action.kind"]) {
+    body.mandate = {};
+    if (kinds["mandate.kind"]) {
+      body.mandate.kind = kinds["mandate.kind"];
+    }
+    if (kinds["action.kind"]) {
+      // Nested under mandate — Sentinel #60 reads mandate.action.kind.
+      body.mandate.action = { kind: kinds["action.kind"] };
+    }
   }
   return body;
 }
