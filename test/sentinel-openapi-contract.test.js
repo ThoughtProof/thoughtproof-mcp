@@ -2,6 +2,11 @@
  * Contract: MCP outbound /sentinel/verify keys ⊆ live Sentinel OpenAPI
  * request properties. Does not call POST /sentinel/verify and does not
  * invent a top-level `quote`.
+ *
+ * PR CI is subset-only (issue #20). Exact pin equality against
+ * SENTINEL_OPENAPI_VERIFY_BODY_FIELDS is optional drift signal via
+ * OPENAPI_EXACT_PIN=1 (nightly / manual), not a blocking PR gate —
+ * Sentinel documenting a new request field must not break MCP CI.
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
@@ -19,6 +24,8 @@ const SAMPLE = {
   proposed_action: "Deploy the API to production",
   reasoning: "CI is green; send-to-prod now",
 };
+
+const EXACT_PIN = process.env.OPENAPI_EXACT_PIN === "1";
 
 describe("Sentinel OpenAPI contract", () => {
   it("parses a fixture spec into documented body fields", () => {
@@ -60,11 +67,22 @@ describe("Sentinel OpenAPI contract", () => {
     const documented = new Set(properties);
     const pinned = [...SENTINEL_OPENAPI_VERIFY_BODY_FIELDS].sort();
 
-    assert.deepEqual(
-      properties,
-      pinned,
-      "SENTINEL_OPENAPI_VERIFY_BODY_FIELDS drifted from live OpenAPI — regenerate the pin",
-    );
+    // Blocking: every pinned field still exists on live OpenAPI (MCP must
+    // not pin a field Sentinel removed). Non-blocking exact equality is
+    // opt-in — live may document extras without breaking this suite.
+    for (const field of pinned) {
+      assert.ok(
+        documented.has(field),
+        `pinned SENTINEL_OPENAPI_VERIFY_BODY_FIELDS entry "${field}" missing from live OpenAPI`,
+      );
+    }
+    if (EXACT_PIN) {
+      assert.deepEqual(
+        properties,
+        pinned,
+        "OPENAPI_EXACT_PIN=1: SENTINEL_OPENAPI_VERIFY_BODY_FIELDS drifted from live OpenAPI — regenerate the pin",
+      );
+    }
     assert.equal(documented.has("quote"), false, "OpenAPI request must not document top-level quote");
 
     const body = buildSentinelVerifyBody(SAMPLE);
