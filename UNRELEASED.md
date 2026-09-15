@@ -28,7 +28,11 @@ Live Sentinel (`ALLOWED_BODY_FIELDS`) rejects a top-level `quote` with HTTP 400,
 
 Optional MCP/`verifyDecision` input `quote`: used only when it is an exact substring of `mandate` **and at least 20 characters** (after trim). Shorter host quotes, paraphrases, and whitespace-only mismatches fall back to the full mandate. If the host quote matches only after collapsing newlines/spaces, evidence includes a `[ThoughtProof quote]` note explaining the fallback. Empty or whitespace-only `mandate` fails closed (`MANDATE_REQUIRED`, `execute: false`) and does not call Sentinel. DQL path unchanged. `execute` still true only on ALLOW. Published pin stays **thoughtproof-mcp@0.3.2**.
 
-Contract test (`test/sentinel-openapi-contract.test.js`) fetches live `openapi.json` and fails if outbound body keys are not a subset of documented `POST /sentinel/verify` properties, or if `SENTINEL_OPENAPI_VERIFY_BODY_FIELDS` drifts from that set. No top-level `quote`. Does not POST `/sentinel/verify`.
+Contract test (`test/sentinel-openapi-contract.test.js`) fetches live `openapi.json` and **blocks** only when outbound body keys are not a subset of documented `POST /sentinel/verify` properties, a pinned field disappeared from live OpenAPI, required fields are missing outbound, or top-level `quote` appears. Exact pin equality (`SENTINEL_OPENAPI_VERIFY_BODY_FIELDS` ↔ live properties) is opt-in via `OPENAPI_EXACT_PIN=1` (nightly/manual drift), so Sentinel documenting extra request fields does not break MCP PR CI (issue #20). No top-level `quote`. Does not POST `/sentinel/verify`.
+
+## Host quote floor (issue #19 closed)
+
+`HOST_QUOTE_MIN_CHARS = 20` is the MCP host-excerpt floor on optional `quote` only: shorter/invalid host quotes fall back to the **full mandate** span embedded in evidence. Sentinel recovery has **no** character-count floor on the embedded span — short mandates remain citeable via full-mandate recovery. Cross-repo label stays `Principal mandate (verbatim quote):`.
 
 ## Structured objections / repair loop (unpublished tree)
 
