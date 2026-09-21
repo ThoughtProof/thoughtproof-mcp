@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
       # pin: hashgraph-online/ai-plugin-scanner-action@v1.2.620
-      - uses: hashgraph-online/ai-plugin-scanner-action@588d157fed6e47942a2ca3c9251ff7bff4a48bc9
+      - uses: hashgraph-online/ai-plugin-scanner-action@3b453b4c378e72c3d0007f64f77781c469122d6c
         with:
           plugin_dir: "."
           mode: scan
