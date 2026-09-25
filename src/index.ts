@@ -111,7 +111,8 @@ const VERIFY_BEFORE_ACTION_DESCRIPTION =
   '(for example, do not write "price is above the cap"). Put the user goal in mandate, the action you are about to take ' +
   "in proposed_action, and your plan in reasoning — the verifier must find the mismatch. " +
   "Optional mandate_kind / action_kind declare Sentinel ActionKind " +
-  "(informational | value_transfer | permission | deploy_ship | unknown) — omit rather than guess. " +
+  "(informational | value_transfer | permission | deploy_ship | unknown) — " +
+  "caller kinds may narrow but NOT widen beyond prose classification. Omit rather than guess. " +
   "Replan = new call = new receipt. Aliases: verify_decision, verify_before_action, verify_before_act.";
 
 const verifyBeforeActionSchema = {
@@ -149,7 +150,8 @@ const verifyBeforeActionSchema = {
     .describe(
       "Optional host-declared Sentinel ActionKind for the mandate (mandate.kind). " +
         "Values: informational | value_transfer | permission | deploy_ship | unknown. " +
-        "Sentinel prefers this over prose classification. Omit rather than guess."
+        "Caller kinds may narrow but NOT widen beyond prose classification. " +
+        "Informational requires prose to also read as informational. Omit rather than guess."
     ),
   action_kind: z
     .enum(ACTION_KINDS)
@@ -157,7 +159,8 @@ const verifyBeforeActionSchema = {
     .describe(
       "Optional host-declared Sentinel ActionKind for the proposed action (action.kind). " +
         "Values: informational | value_transfer | permission | deploy_ship | unknown. " +
-        "Sentinel prefers this over prose classification. Omit rather than guess."
+        "Caller kinds may narrow but NOT widen beyond prose classification. " +
+        "Informational requires prose to also read as informational. Omit rather than guess."
     ),
   mode: z
     .enum(["dql", "sentinel", "auto"])

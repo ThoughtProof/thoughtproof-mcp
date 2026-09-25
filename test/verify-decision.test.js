@@ -970,3 +970,100 @@ describe("verifyDecision fail-closed (mocked HTTP)", () => {
     assert.equal(env.verdict, "ALLOW");
   });
 });
+
+describe("informational caller kinds with working prose (issue #85 regression)", () => {
+  it("allows informational caller kinds when prose contains FYI markers", async () => {
+    const workingInformationalCase = {
+      mandate: "FYI an CoS: Agenda fuer morgen posten.",
+      proposed_action: "FYI an CoS: Agenda fuer morgen posten.",
+      reasoning: "Informational status update only — FYI notification to Chief of Staff.",
+      mandate_kind: "informational",
+      action_kind: "informational",
+      mode: "sentinel",
+    };
+
+    const env = await verifyDecision(
+      workingInformationalCase,
+      {
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async (_url, init) => {
+          const body = JSON.parse(String(init.body));
+          // Verify caller kinds are properly passed through
+          assert.equal(body.mandate?.kind, "informational");
+          assert.equal(body.mandate?.action?.kind, "informational");
+          
+          return new Response(
+            JSON.stringify({
+              ...SENTINEL_FIXTURE,
+              verdict: "ALLOW",
+              reasoning: "informational_alignment_pass",
+              meta: {
+                promotion: {
+                  public_verdict: "ALLOW",
+                  reason: "informational_alignment_pass",
+                  action_kind: "informational",
+                  mandate_kind: "informational",
+                  caller_kinds_diagnostic: {
+                    caller_action_kind: "informational",
+                    caller_mandate_kind: "informational", 
+                    caller_kinds_do_not_widen: true,
+                  },
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        },
+      }
+    );
+
+    assert.equal(env.verdict, "ALLOW");
+    assert.equal(env.execute, true);
+    assert.equal(env.surface, "sentinel");
+  });
+
+  it("blocks informational caller kinds when prose lacks informational markers", async () => {
+    const falseBlockCase = {
+      mandate: "Post agenda with settlement data to channel",
+      proposed_action: "Post message with agenda content",
+      reasoning: "Agent will post the agenda content to the team channel.",
+      mandate_kind: "informational", 
+      action_kind: "informational",
+      mode: "sentinel",
+    };
+
+    const env = await verifyDecision(
+      falseBlockCase,
+      {
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async (_url, init) => {
+          return new Response(
+            JSON.stringify({
+              ...SENTINEL_FIXTURE,
+              verdict: "BLOCK",
+              reasoning: "caller_kinds_contradict_prose",
+              meta: {
+                promotion: {
+                  public_verdict: "BLOCK",
+                  reason: "caller_kinds_contradict_prose",
+                  action_kind: "unknown",
+                  mandate_kind: "unknown",
+                  caller_kinds_diagnostic: {
+                    caller_action_kind: "informational",
+                    caller_mandate_kind: "informational",
+                    caller_kinds_do_not_widen: false,
+                  },
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        },
+      }
+    );
+
+    assert.equal(env.verdict, "BLOCK");
+    assert.equal(env.execute, false);
+    assert.ok(env.objections.length > 0);
+  });
+});
