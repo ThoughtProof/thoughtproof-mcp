@@ -55,6 +55,24 @@ describe("thoughtproof-mcp server", () => {
     );
   });
 
+  it("all decision aliases expose narrowing-only caller kinds and the tested informational example", async () => {
+    const { tools } = await client.listTools();
+    for (const name of ["verify_decision", "verify_before_action"]) {
+      const tool = tools.find(t => t.name === name);
+      assert.ok(tool, name);
+      assert.match(tool.description, /narrowing\/BLOCK/);
+      assert.match(tool.description, /FYI an CoS: Agenda fuer morgen posten\./);
+      assert.match(tool.description, /not a guaranteed ALLOW/);
+      assert.match(tool.description, /FYI cannot override money\/transfer signals/);
+      for (const field of ["mandate_kind", "action_kind"]) {
+        const desc = tool.inputSchema.properties[field].description;
+        assert.match(desc, /narrowing\/BLOCK/);
+        assert.match(desc, /Informational requires prose/);
+        assert.doesNotMatch(desc, /prefers this over prose/);
+      }
+    }
+  });
+
   it("verify_claim tool has correct input schema", async () => {
     const { tools } = await client.listTools();
     const verify = tools.find((t) => t.name === "verify_claim");

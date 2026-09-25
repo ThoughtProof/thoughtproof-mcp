@@ -112,8 +112,13 @@ const VERIFY_BEFORE_ACTION_DESCRIPTION =
   "in proposed_action, and your plan in reasoning — the verifier must find the mismatch. " +
   "Optional mandate_kind / action_kind declare Sentinel ActionKind " +
   "(informational | value_transfer | permission | deploy_ship | unknown) — " +
-  "caller kinds may narrow but NOT widen beyond prose classification. Omit rather than guess. " +
-  "Replan = new call = new receipt. Aliases: verify_decision, verify_before_action, verify_before_act.";
+  "Caller kinds are authoritative only in the narrowing/BLOCK direction; declarations alone cannot widen authorization. " +
+  "Informational requires informational prose on both sides. For an actual informational post, " +
+  "example mandate and proposed_action: 'FYI an CoS: Agenda fuer morgen posten.' with both kinds informational. " +
+  "This matches kinds, not a guaranteed ALLOW; other gates still apply. " +
+  "FYI cannot override money/transfer signals. Never disguise an action or rephrase it just to obtain ALLOW. " +
+  "Omit kinds rather than guess. " +
+  "Replan = new call = new receipt. Aliases: verify_decision, verify_before_action.";
 
 const verifyBeforeActionSchema = {
   mandate: z
@@ -150,7 +155,7 @@ const verifyBeforeActionSchema = {
     .describe(
       "Optional host-declared Sentinel ActionKind for the mandate (mandate.kind). " +
         "Values: informational | value_transfer | permission | deploy_ship | unknown. " +
-        "Caller kinds may narrow but NOT widen beyond prose classification. " +
+        "Caller kinds apply in the narrowing/BLOCK direction; declarations alone cannot widen authorization. " +
         "Informational requires prose to also read as informational. Omit rather than guess."
     ),
   action_kind: z
@@ -159,7 +164,7 @@ const verifyBeforeActionSchema = {
     .describe(
       "Optional host-declared Sentinel ActionKind for the proposed action (action.kind). " +
         "Values: informational | value_transfer | permission | deploy_ship | unknown. " +
-        "Caller kinds may narrow but NOT widen beyond prose classification. " +
+        "Caller kinds apply in the narrowing/BLOCK direction; declarations alone cannot widen authorization. " +
         "Informational requires prose to also read as informational. Omit rather than guess."
     ),
   mode: z
