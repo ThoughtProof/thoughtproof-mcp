@@ -50,8 +50,8 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/node": "^22.20.3",
-    "tsx": "^4.23.13",
+    "@types/node": "^22.20.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.0.0"
   },
   "files": [
