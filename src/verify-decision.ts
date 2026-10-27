@@ -10,6 +10,7 @@
  * execute=false. Passing in_reply_to is a new verify call (new receipt).
  */
 
+import { createHash } from "node:crypto";
 import {
   callDql,
   resolveDqlCredential,
@@ -113,10 +114,87 @@ export function executeAllowed(verdict: string): boolean {
   return String(verdict ?? "").toUpperCase() === "ALLOW";
 }
 
+/** Hard cap so a step prompt cannot become an objection_id. */
+const OBJECTION_ID_MAX_LEN = 80;
+/**
+ * Sanitized slots longer than this are replaced with sha256(slot)[:8].
+ * Short DQL axis tokens and step_ids stay readable.
+ */
+const OBJECTION_SLOT_EMBED_MAX = 64;
+/** step_id is copied into the id only when it is already a short safe token. */
+const STEP_ID_SLOT_MAX = 48;
+const SAFE_SLOT = /^[a-zA-Z0-9._-]+$/;
+
+function sha256Prefix(value: string, chars = 8): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, chars);
+}
+
 export function objectionId(receiptId: string, slot: string | number): string {
-  const rec = String(receiptId || "noreceipt").replace(/[^a-zA-Z0-9._-]+/g, "_");
-  const sl = String(slot).replace(/[^a-zA-Z0-9._-]+/g, "_");
-  return `o_${rec}_${sl}`;
+  const rawReceipt = String(receiptId || "noreceipt");
+  const rec = rawReceipt.replace(/[^a-zA-Z0-9._-]+/g, "_");
+  const rawSlot = String(slot);
+  let sl = rawSlot.replace(/[^a-zA-Z0-9._-]+/g, "_");
+  if (sl.length > OBJECTION_SLOT_EMBED_MAX) {
+    sl = sha256Prefix(rawSlot);
+  }
+  const id = `o_${rec}_${sl}`;
+  if (id.length <= OBJECTION_ID_MAX_LEN) return id;
+  const compact = `o_${sha256Prefix(rawReceipt)}_${sl}`;
+  if (compact.length <= OBJECTION_ID_MAX_LEN) return compact;
+  return `o_${sha256Prefix(`${rawReceipt}\0${rawSlot}`, 16)}`;
+}
+
+function isShortSafeStepId(stepId: string, receiptId: string): boolean {
+  if (!stepId || stepId.length > STEP_ID_SLOT_MAX || !SAFE_SLOT.test(stepId)) return false;
+  const plain = objectionId(receiptId, stepId);
+  const suffixed = objectionId(receiptId, `${stepId}_999999`);
+  return (
+    plain.length <= OBJECTION_ID_MAX_LEN &&
+    suffixed.length <= OBJECTION_ID_MAX_LEN &&
+    plain.endsWith(`_${stepId}`) &&
+    suffixed.endsWith(`_${stepId}_999999`)
+  );
+}
+
+/**
+ * step_id when it is already short and safe; otherwise sha256(criterion)[:8];
+ * the source index only when neither is usable. Criterion prose stays out of the id.
+ */
+function sentinelObjectionSlot(obj: SentinelObjection, idx: number, receiptId: string): string {
+  const stepId = String(obj.step_id ?? "").trim();
+  if (isShortSafeStepId(stepId, receiptId)) return stepId;
+  const criterion = obj.criterion == null ? "" : String(obj.criterion);
+  if (criterion.trim()) return sha256Prefix(criterion);
+  return String(idx);
+}
+
+/** Token-like criteria keep today's axis code. A step prompt does not. */
+function sentinelObjectionCode(criterion: unknown): string {
+  const raw = String(criterion ?? "").trim();
+  if (/^[A-Za-z0-9._-]{1,32}$/.test(raw)) return axisCode(raw);
+  return "EVIDENCE";
+}
+
+function allocateObjectionId(
+  receiptId: string,
+  slot: string,
+  idx: number,
+  used: Set<string>,
+): string {
+  let id = objectionId(receiptId, slot);
+  if (!used.has(id)) {
+    used.add(id);
+    return id;
+  }
+  // Same criterion (or step_id) twice in one receipt: append the source index.
+  let n = idx;
+  id = objectionId(receiptId, `${slot}_${n}`);
+  while (used.has(id)) {
+    n += 1;
+    id = objectionId(receiptId, `${slot}_${n}`);
+  }
+  used.add(id);
+  return id;
 }
 
 export function axisCode(axis: string): string {
@@ -272,14 +350,15 @@ export function mapSentinelEnvelope(body: SentinelResponse, inReplyTo?: string):
   const structured: StructuredObjection[] = [];
 
   if (Array.isArray(body.objections)) {
+    const usedIds = new Set<string>();
     body.objections.forEach((obj: SentinelObjection, idx: number) => {
       const text = String(obj.reasoning ?? obj.quote ?? "").trim();
       if (text) objections.push(text);
-      const slot = obj.criterion || obj.step_id || idx;
       if (text || obj.criterion) {
+        const slot = sentinelObjectionSlot(obj, idx, receipt_id);
         structured.push({
-          objection_id: objectionId(receipt_id, slot),
-          code: axisCode(String(obj.criterion || "EVIDENCE")),
+          objection_id: allocateObjectionId(receipt_id, slot, idx, usedIds),
+          code: sentinelObjectionCode(obj.criterion),
           severity: "blocked_until",
           claim: String(obj.criterion || obj.predicate || "action"),
           message: text || String(obj.predicate || "unsupported"),
