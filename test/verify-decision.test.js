@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { routeDecision } from "../dist/route-decision.js";
@@ -10,6 +11,7 @@ import {
   executeAllowed,
   mapDqlEnvelope,
   mapSentinelEnvelope,
+  objectionId,
   verifyDecision,
   applyRepairContext,
 } from "../dist/verify-decision.js";
@@ -568,6 +570,9 @@ describe("envelope mapping", () => {
     assert.ok(env.structured_objections.length >= 1);
     assert.equal(env.structured_objections[0].severity, "blocked_until");
     assert.equal(env.structured_objections[0].code, "EVIDENCE");
+    assert.equal(env.structured_objections[0].objection_id, "o_req_m1abc_x9f2kq_step_0");
+    assert.equal(env.structured_objections[0].claim, "evidence");
+    assert.equal(env.structured_objections[0].axis_or_surface, "evidence");
   });
 
   it("sets execute true only when the native verdict is ALLOW", () => {
@@ -589,6 +594,189 @@ describe("envelope mapping", () => {
 
     const uncertain = mapSentinelEnvelope(SENTINEL_FIXTURE);
     assert.equal(uncertain.execute, false);
+  });
+});
+
+function sha256Prefix(value) {
+  return createHash("sha256").update(value).digest("hex").slice(0, 8);
+}
+
+/** Previous id builder: sanitize but never shorten. Used to show the leak. */
+function legacyObjectionId(receiptId, slot) {
+  const rec = String(receiptId || "noreceipt").replace(/[^a-zA-Z0-9._-]+/g, "_");
+  const sl = String(slot).replace(/[^a-zA-Z0-9._-]+/g, "_");
+  return `o_${rec}_${sl}`;
+}
+
+describe("sentinel objection_id", () => {
+  const receipt = "req_m1abc_x9f2kq";
+  const LONG_CRITERION =
+    "Confirm the release owner approved the maintenance window and that the rollback plan names a human before production deploy proceeds.";
+
+  function envelope(objections, id = receipt, verdict = "BLOCK") {
+    return mapSentinelEnvelope({
+      id,
+      verdict,
+      reasoning: "Insufficient evidence.",
+      objections,
+    });
+  }
+
+  it("hashes a long criterion prompt into a bounded id with no prompt text", () => {
+    const env = envelope([
+      {
+        criterion: LONG_CRITERION,
+        reasoning: "Missing approval.",
+        predicate: "unsupported",
+      },
+    ]);
+    const objection = env.structured_objections[0];
+    const oid = objection.objection_id;
+    const before = legacyObjectionId(receipt, LONG_CRITERION);
+    assert.ok(before.length > 80);
+    assert.equal(before.includes("maintenance_window"), true);
+    assert.equal(oid, `o_${receipt}_${sha256Prefix(LONG_CRITERION)}`);
+    assert.ok(oid.length <= 80);
+    assert.equal(oid.includes("maintenance"), false);
+    assert.equal(oid.includes("rollback"), false);
+    assert.equal(oid.includes("release_owner"), false);
+    assert.equal(oid.includes(LONG_CRITERION.slice(0, 24)), false);
+    assert.equal(objection.claim, LONG_CRITERION);
+    assert.equal(objection.axis_or_surface, LONG_CRITERION);
+    assert.equal(objection.message, "Missing approval.");
+    assert.equal(objection.code, "EVIDENCE");
+    assert.equal(objection.code.includes("maintenance"), false);
+    assert.equal(env.verdict, "BLOCK");
+    assert.equal(env.execute, false);
+    assert.equal(objectionId(receipt, LONG_CRITERION), oid);
+  });
+
+  it("prefers a short safe step_id over criterion text", () => {
+    const env = envelope([
+      {
+        step_id: "step_0",
+        criterion: LONG_CRITERION,
+        reasoning: "Missing approval.",
+      },
+    ]);
+    const objection = env.structured_objections[0];
+    assert.equal(objection.objection_id, `o_${receipt}_step_0`);
+    assert.ok(objection.objection_id.length <= 80);
+    assert.equal(objection.objection_id.includes("maintenance"), false);
+    assert.equal(objection.claim, LONG_CRITERION);
+    assert.equal(objection.axis_or_surface, LONG_CRITERION);
+    assert.equal(env.execute, false);
+    assert.equal(env.verdict, "BLOCK");
+  });
+
+  it("ignores a long or unsafe step_id and hashes the criterion", () => {
+    const hashed = envelope([
+      {
+        step_id: `step ${LONG_CRITERION}`,
+        criterion: LONG_CRITERION,
+        reasoning: "Missing approval.",
+      },
+    ]);
+    assert.equal(
+      hashed.structured_objections[0].objection_id,
+      `o_${receipt}_${sha256Prefix(LONG_CRITERION)}`,
+    );
+
+    const indexed = envelope([
+      { step_id: LONG_CRITERION, reasoning: "No criterion token." },
+    ]);
+    assert.equal(indexed.structured_objections[0].objection_id, `o_${receipt}_0`);
+    assert.equal(indexed.structured_objections[0].objection_id.includes("Confirm"), false);
+    assert.ok(indexed.structured_objections[0].objection_id.length <= 80);
+  });
+
+  it("keeps duplicate criteria and step_ids unique within a receipt", () => {
+    const env = envelope([
+      { criterion: LONG_CRITERION, reasoning: "first" },
+      { criterion: LONG_CRITERION, reasoning: "second" },
+      { step_id: "step_0", criterion: "evidence", reasoning: "third" },
+      { step_id: "step_0", criterion: "evidence", reasoning: "fourth" },
+    ]);
+    const ids = env.structured_objections.map((o) => o.objection_id);
+    const hash = sha256Prefix(LONG_CRITERION);
+    assert.deepEqual(ids, [
+      `o_${receipt}_${hash}`,
+      `o_${receipt}_${hash}_1`,
+      `o_${receipt}_step_0`,
+      `o_${receipt}_step_0_3`,
+    ]);
+    assert.equal(new Set(ids).size, ids.length);
+    for (const id of ids) {
+      assert.ok(id.length <= 80);
+      assert.equal(id.includes("maintenance"), false);
+    }
+    assert.equal(env.structured_objections[0].claim, LONG_CRITERION);
+    assert.equal(env.structured_objections[1].claim, LONG_CRITERION);
+    assert.equal(env.execute, false);
+  });
+
+  it("is deterministic for the same receipt and objections", () => {
+    const objections = [
+      { criterion: LONG_CRITERION, reasoning: "first" },
+      { step_id: "step_4", criterion: LONG_CRITERION, reasoning: "second" },
+      { criterion: LONG_CRITERION, reasoning: "third" },
+    ];
+    const first = envelope(objections);
+    const second = envelope(objections);
+    assert.deepEqual(
+      first.structured_objections.map((o) => o.objection_id),
+      second.structured_objections.map((o) => o.objection_id),
+    );
+    const hash = sha256Prefix(LONG_CRITERION);
+    assert.deepEqual(
+      first.structured_objections.map((o) => o.objection_id),
+      [`o_${receipt}_${hash}`, `o_${receipt}_step_4`, `o_${receipt}_${hash}_2`],
+    );
+  });
+
+  it("bounds the id when the receipt id itself is very long", () => {
+    const longReceipt = `req_${"a".repeat(180)}`;
+    const env = envelope(
+      [{ criterion: LONG_CRITERION, reasoning: "Missing approval." }],
+      longReceipt,
+    );
+    const oid = env.structured_objections[0].objection_id;
+    assert.ok(oid.length <= 80);
+    assert.equal(oid.includes("maintenance"), false);
+    assert.equal(oid.includes("a".repeat(40)), false);
+    const again = envelope(
+      [{ criterion: LONG_CRITERION, reasoning: "Missing approval." }],
+      longReceipt,
+    );
+    assert.equal(again.structured_objections[0].objection_id, oid);
+  });
+
+  it("does not change ALLOW or fail-closed execute semantics", () => {
+    const allow = envelope(
+      [{ criterion: LONG_CRITERION, reasoning: "ignored on allow" }],
+      receipt,
+      "ALLOW",
+    );
+    assert.equal(allow.verdict, "ALLOW");
+    assert.equal(allow.execute, true);
+    assert.deepEqual(allow.structured_objections, []);
+
+    const uncertain = envelope(
+      [{ step_id: "step_0", criterion: LONG_CRITERION, reasoning: "missing" }],
+      receipt,
+      "UNCERTAIN",
+    );
+    assert.equal(uncertain.verdict, "UNCERTAIN");
+    assert.equal(uncertain.execute, false);
+    assert.equal(uncertain.structured_objections[0].objection_id, `o_${receipt}_step_0`);
+
+    const errored = envelope(
+      [{ criterion: LONG_CRITERION, reasoning: "missing" }],
+      receipt,
+      "ERROR",
+    );
+    assert.equal(errored.verdict, "ERROR");
+    assert.equal(errored.execute, false);
   });
 });
 
