@@ -8,7 +8,8 @@
  * Tools:
  *   - verify_decision: Hero pre-execution gate. Routes internally to DQL
  *                      (spend/checkout) or Sentinel (irreversible exit).
- *                      Soft fail-closed: execute is true ONLY on ALLOW.
+ *                      Soft fail-closed: Sentinel execute is true ONLY when the
+ *                      signed export verdict is ALLOW and matches the response.
  *   - verify_claim: Verify any claim or AI-generated reasoning (RV /v1/check)
  *   - check_agent_score: Get an agent's trust score
  *   - verify_trade: Pre-execution gate for autonomous trading/action agents.
@@ -98,13 +99,14 @@ const server = new McpServer({
 
 // Hero tool: pre-action verification gate.
 // Canonical name: verify_decision. Alias: verify_before_action (same handler).
-// Routes DQL (spend) or Sentinel (irreversible exit). Soft fail-closed: execute=true ONLY on ALLOW.
+// Routes DQL (spend) or Sentinel (irreversible exit).
+// Sentinel execute=true only for a verified signed ALLOW that matches the response.
 // Auth path unchanged: resolveDqlCredential (dqlk_ / dqla_ / DQL_ACCOUNT_TOKEN).
 const VERIFY_BEFORE_ACTION_DESCRIPTION =
   "ThoughtProof pre-action verification gate: verify before the agent pays, trades, writes, or deploys. " +
   "Call this BEFORE any consequential tool (payment, trade, transfer, publish, delete, deploy, irreversible write). " +
   "Returns { verdict, execute, objections, structured_objections, receipt_id, surface, loop, axes?, recommendation, in_reply_to? }. " +
-  "execute is true ONLY on ALLOW — on any other result do NOT execute (soft fail-closed; host must honor execute=false). " +
+  "execute is true ONLY on ALLOW. On the Sentinel route that ALLOW must be the signed-export verdict and it must match the response — a missing, invalid, or contradicting signature does not execute (soft fail-closed; host must honor execute=false). " +
   "If structured_objections have severity blocked_until, repair using repair_hints and call again with in_reply_to set to that objection_id (new receipt; prior ALLOW does not carry). " +
   "Routes internally to DQL (spend/checkout) or Sentinel (irreversible exit). " +
   "Camera mandate: you must NOT put the overshoot or constraint violation in proposed_action or reasoning " +

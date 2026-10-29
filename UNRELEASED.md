@@ -1,5 +1,11 @@
 # Unpublished 0.4.0-dev
 
+## Signed export binding (unpublished tree)
+
+`verify_before_action` / `verify_decision` (Sentinel route) and `verify_trade`'s Sentinel client no longer treat the outer `verdict` as sufficient. `execute: true` requires a `signed_export` (and `signed_export_v2` when present) whose Ed25519 signature verifies under the pinned public export keys, whose `verificationId` matches the response id, and whose canonical verdict is `ALLOW` and matches the outer verdict. Missing, invalid, expired, or unverifiable signatures, verdict mismatches, and HTTP 401 / 429 / 5xx stay `execute: false`. A valid signature of BLOCK or UNCERTAIN does not become ALLOW.
+
+The verification public key is not `X-Sentinel-Key`. It is the pinned copy of Sentinel `thoughtproof-keys.json` (`/.well-known/thoughtproof-keys.json`). `validation-keys.json` is a different trust root and is not accepted for `signed_export`. `TP_REQUIRE_SIGNED_BINDING` defaults to required. Set it to `0` only as a compatibility escape that trusts the outer verdict again. `SENTINEL_EXPORT_KEYS_JSON` may replace the export pin with a public key document. No package version bump and no npm publish.
+
 ## Claim framing + host-declared kinds (unpublished tree)
 
 `verify_before_action` / `verify_decision` (Sentinel `mode=action_authorization`) now set `claim` to **`"<proposed_action> is authorized by the principal's mandate"`** so the cascade scores authorization, not a restatement of the action (issue #21 / Sentinel #36).

@@ -10,7 +10,7 @@
 
 ## What this package is
 
-`thoughtproof-mcp` is a **local stdio MCP server**. It does not hard-kill the host process. Soft fail-closed means: missing keys, timeouts, HTTP 4xx/5xx, and non-ALLOW verdicts return `execute: false`. The host must honor that flag.
+`thoughtproof-mcp` is a **local stdio MCP server**. It does not hard-kill the host process. Soft fail-closed means: missing keys, timeouts, HTTP 4xx/5xx, and non-ALLOW verdicts return `execute: false`. On the Sentinel route, `execute: true` also requires a signed export that verifies under the pinned public export key and whose verdict matches the response. A missing or invalid signature does not execute. The host must honor that flag.
 
 It is **not** a remote HTTP MCP endpoint and **not** an identity / trust-score product. A catalog listing or HOL Guard score is **not** authorization to take the next action.
 
@@ -47,5 +47,5 @@ Local operator wrappers (e.g. loading a key file then `npx`) must keep key files
 ## Scope notes
 
 - Network calls go to ThoughtProof verification APIs configured by the operator (DQL / Sentinel / RV). Review those endpoints and your key scopes before production use.
-- `verify_decision` / `verify_before_action` never set `execute: true` except on native `ALLOW`.
+- `verify_decision` / `verify_before_action` never set `execute: true` except on native `ALLOW`. Sentinel ALLOW must be the verified signed-export verdict. `TP_REQUIRE_SIGNED_BINDING` defaults to required; `0` is a compatibility escape that trusts the outer verdict.
 - Tool descriptions forbid stuffing “already over budget” into `proposed_action` so the verifier can find real mismatches.
