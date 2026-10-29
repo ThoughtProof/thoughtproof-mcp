@@ -8,6 +8,8 @@ The Sentinel envelope returns the presented `signed_export` / `signed_export_v2`
 
 The same signed ALLOW still returns `execute: true` for a different proposed action (for example deploy staging and delete production database). Action and mandate binding is the next change, not this one.
 
+Sentinel signs `validUntil` only when `SENTINEL_EXPORT_TTL_SECONDS > 0` (`maybeIssueSignedExport` / `maybeIssueSignedExportV2` share that TTL). v1 and v2 therefore both include it or both omit it. This MCP still requires a fresh `validUntil` before `execute: true`. If the TTL is unset, a genuine ALLOW does not execute here. `signed_export_v2` is attached only when v2 signing succeeds; a failure omits the field and does not change v1. v2 uses the same envelope as v1. Its canonical string is opaque JCS and may nest models, gate, and policy.
+
 The verification public key is not `X-Sentinel-Key`. It is the pinned copy of Sentinel `thoughtproof-keys.json` (`/.well-known/thoughtproof-keys.json`). `validation-keys.json` is a different trust root and is not accepted for `signed_export`. `TP_REQUIRE_SIGNED_BINDING` is ignored for execute; an off value is logged once. `SENTINEL_EXPORT_KEYS_JSON` may replace the export pin with a public key document. No package version bump and no npm publish.
 
 ## Claim framing + host-declared kinds (unpublished tree)

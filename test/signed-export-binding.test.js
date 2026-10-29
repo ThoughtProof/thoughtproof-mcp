@@ -5,8 +5,11 @@
  * ALLOW over signed BLOCK" into the fail-closed expectation.
  */
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import { mapSentinelEnvelope, verifyDecision } from "../dist/verify-decision.js";
 import { verifyTrade } from "../dist/verify-client.js";
 import {
@@ -465,6 +468,68 @@ describe("signed export binding", () => {
         },
       );
     }
+  });
+});
+
+describe("sentinel vector fixtures (real v1 + v2 signing format)", () => {
+  // thoughtproof-sentinel main 54cba8b6fe4e682d6cd6810fe83d2644bfa9dd6d
+  // scripts/fixtures/m1-export/export-valid.json
+  // scripts/fixtures/m1-export-v2/export-v2-valid.json
+  // Signed with kid tp-sentinel-export-ed25519-2026-09-vector (fixture seed,
+  // not the production private key). Generators set ttl = 86400, which is the
+  // same condition as SENTINEL_EXPORT_TTL_SECONDS > 0: validUntil is present.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const v1 = JSON.parse(
+    readFileSync(join(here, "fixtures/sentinel-export-v1-allow.json"), "utf8"),
+  );
+  const v2 = JSON.parse(
+    readFileSync(join(here, "fixtures/sentinel-export-v2-allow.json"), "utf8"),
+  );
+  const body = {
+    id: v1.verificationId,
+    verdict: "ALLOW",
+    confidence: 0.84,
+    reasoning: "All steps adequately supported by the evidence.",
+    objections: [],
+    mode: "trade_execution",
+    tier: "standard",
+    signed_export: v1,
+    signed_export_v2: v2,
+  };
+
+  it("genuine v1+v2 ALLOW with validUntil executes", () => {
+    assert.equal(v1.artifactSchema, "sentinel.verdict.canonical.v1");
+    assert.equal(v2.artifactSchema, "sentinel.verdict.canonical.v2");
+    assert.equal(v1.keyId, "tp-sentinel-export-ed25519-2026-09-vector");
+    assert.equal(v2.keyId, v1.keyId);
+    assert.equal(typeof v1.validUntil, "number");
+    assert.equal(v2.validUntil, v1.validUntil);
+    assert.equal(JSON.parse(v1.canonical).verdict, "ALLOW");
+    assert.equal(JSON.parse(v2.canonical).verdict, "ALLOW");
+    assert.equal(typeof JSON.parse(v2.canonical).models, "object");
+    assert.equal(v2.canonical.includes("sentinel.verdict.canonical.v2"), true);
+
+    const envelope = mapSentinelEnvelope(body, undefined, {
+      nowSeconds: v1.signedAt,
+      allowVectorOnly: true,
+      env: {},
+    });
+    assert.equal(envelope.execute, true);
+    assert.equal(envelope.verdict, "ALLOW");
+    assert.equal(envelope.signed_export_verification.ok, true);
+    assert.equal(envelope.signed_export_verification.code, "ok");
+    assert.equal(envelope.signed_export_verification.signed_verdict, "ALLOW");
+    assert.deepEqual(envelope.signed_export, v1);
+    assert.deepEqual(envelope.signed_export_v2, v2);
+  });
+
+  it("does not accept the vector kid unless the test opts in", () => {
+    const envelope = mapSentinelEnvelope(body, undefined, {
+      nowSeconds: v1.signedAt,
+      env: {},
+    });
+    assert.equal(envelope.execute, false);
+    assert.equal(envelope.signed_export_verification.code, "vector_only_key_not_allowed");
   });
 });
 

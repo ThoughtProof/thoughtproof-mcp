@@ -1,0 +1,12 @@
+{
+  "exportSchema": "thoughtproof.sentinel.export.v1",
+  "artifactSchema": "sentinel.verdict.canonical.v2",
+  "verificationId": "sent_9f3c2a7b1e004d68",
+  "canonical": "{\"apiVersion\":\"sentinel-api-0.1.0\",\"artifactSchema\":\"sentinel.verdict.canonical.v2\",\"confidence\":84,\"evaluatedAt\":1782916498,\"mode\":\"trade_execution\",\"models\":{\"primary\":\"serv-nano\",\"secondary\":\"serv-swift\"},\"objections\":[\"step_0: Direction claim verified against market data.\"],\"policy\":\"adr-0019-cascade-promotion-2026-08-08+p0-primary-error-fail-closed+p0-objective-mismatch-fail-closed+p0-informational-allowlist+p0-unknown-action-fail-closed+p0-unclassified-abstention-uncertain+p0-caller-declared-kinds\",\"potCli\":\"0.8.12\",\"reasoning\":\"All steps adequately supported by the evidence.\",\"releaseId\":\"da6b6378e105d0c7e1f810bbe237d2f23c55c103\",\"tier\":\"standard\",\"verdict\":\"ALLOW\",\"verificationId\":\"sent_9f3c2a7b1e004d68\"}",
+  "digest": "0xc09fc9ba6679afb0b1759854cb3ddefe97263f0bb4abd03b1efa820be2848fd2",
+  "keyId": "tp-sentinel-export-ed25519-2026-09-vector",
+  "alg": "Ed25519",
+  "signedAt": 1782916498,
+  "validUntil": 1783002898,
+  "signature": "0xa1d72eba7459aa2dcd68697a14cfb9b5de3dfbbd55fb3bbe03e3d8f55d0718a96dcb2c2046fef86757f8601431b641b93b8f37fc7acffa155d99debcfb11ab06"
+}

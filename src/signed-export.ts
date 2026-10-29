@@ -36,6 +36,20 @@ export const SCHEMA_V1 = "sentinel.verdict.canonical.v1";
 export const SCHEMA_V2 = "sentinel.verdict.canonical.v2";
 
 /**
+ * v1 and v2 share this envelope (api/sentinel/verify.ts).
+ * `signed_export` must be canonical v1. `signed_export_v2` must be canonical v2.
+ * The `canonical` string is opaque JCS: v2 may nest models, gate, and policy
+ * inside it. Do not re-serialize that string.
+ * Sentinel attaches v2 only when maybeIssueSignedExportV2 returns an export.
+ * A signing failure omits the field. It does not send null and does not change v1.
+ *
+ * validUntil is signed only when SENTINEL_EXPORT_TTL_SECONDS > 0
+ * (loadExportSignerFromEnv → issueSignedCanonicalExport). v1 and v2 use that
+ * same TTL, so they both include validUntil or both omit it. This checker
+ * still requires a fresh validUntil before execute.
+ */
+
+/**
  * Historical switch. It does not change execute. An off value is logged
  * and the Sentinel path still requires a verified signed ALLOW.
  */
