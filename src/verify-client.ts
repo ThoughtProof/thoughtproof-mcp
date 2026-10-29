@@ -19,6 +19,8 @@
 // Sentinel call (Base eip155:8453 or GOAT eip155:2345) and the settlement
 // receipt is surfaced back to the caller.
 
+import { gateOuterVerdict, type SentinelBindingOptions } from "./signed-export.js";
+
 export type Verdict = "ALLOW" | "BLOCK" | "UNCERTAIN";
 
 /** RV verdict threshold — higher stake demands higher reasoning soundness to ALLOW. */
@@ -99,6 +101,9 @@ export interface VerifyClientConfig {
   apiKey?: string;
   x402PaymentSignature?: string;
   sentinelTier?: "checkpoint" | "standard";
+  fetchImpl?: typeof fetch;
+  /** Sentinel signed-export check. Default fail-closed. */
+  signedBinding?: SentinelBindingOptions;
 }
 
 const SENTINEL_URL =
@@ -125,6 +130,8 @@ export class PaymentRequiredError extends Error {
 interface SentinelCallResult {
   result: SentinelResult;
   payment: VerifyTradeResult["payment"];
+  /** Untrusted outer verdict. Do not escalate to RV and do not ALLOW. */
+  blocksEscalation: boolean;
 }
 
 async function callSentinel(
@@ -134,8 +141,9 @@ async function callSentinel(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (cfg.apiKey) headers["X-Sentinel-Key"] = cfg.apiKey;
   if (cfg.x402PaymentSignature) headers["PAYMENT-SIGNATURE"] = cfg.x402PaymentSignature;
+  const fetchImpl = cfg.fetchImpl ?? fetch;
 
-  const res = await fetch(SENTINEL_URL, {
+  const res = await fetchImpl(SENTINEL_URL, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -175,8 +183,15 @@ async function callSentinel(
 
   const d = (await res.json()) as Record<string, any>;
   const att = d.attestation as Record<string, any> | undefined;
+  const gated = gateOuterVerdict(d.verdict, d, cfg.signedBinding);
+  const gatedVerdict = normalizeVerdict(gated.verdict);
+  const verdict = gated.execute ? gatedVerdict : gatedVerdict === "ALLOW" ? "UNCERTAIN" : gatedVerdict;
+  const blocksEscalation =
+    !gated.execute &&
+    gated.code !== "ok" &&
+    gated.code !== "signed_not_allow";
   const result: SentinelResult = {
-    verdict: normalizeVerdict(d.verdict),
+    verdict,
     confidence: Number(d.confidence ?? 0),
     reason: String(d.reasoning ?? ""),
     attestation: att
@@ -189,14 +204,15 @@ async function callSentinel(
         }
       : undefined,
   };
-  return { result, payment };
+  return { result, payment, blocksEscalation };
 }
 
 async function callRv(input: VerifyTradeInput, cfg: VerifyClientConfig): Promise<RvResult> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (cfg.apiKey) headers["X-API-Key"] = cfg.apiKey;
 
-  const res = await fetch(RV_URL, {
+  const fetchImpl = cfg.fetchImpl ?? fetch;
+  const res = await fetchImpl(RV_URL, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -278,7 +294,23 @@ export async function verifyTrade(
   const stakeLevel = input.stakeLevel ?? "high";
   const escalateToRv = stakeLevel !== "micro";
 
-  const { result: sentinel, payment } = await callSentinel(input, cfg);
+  const { result: sentinel, payment, blocksEscalation } = await callSentinel(input, cfg);
+
+  if (blocksEscalation) {
+    const verdict = sentinel.verdict === "BLOCK" ? "BLOCK" : "UNCERTAIN";
+    return {
+      verdict,
+      recommendation: recommend(verdict),
+      route: "sentinel",
+      objections: sentinel.reason
+        ? [{ severity: "high", explanation: sentinel.reason }]
+        : [{ severity: "high", explanation: "Sentinel signed export was missing, invalid, or inconsistent." }],
+      sentinel,
+      attestation: { sentinelClaimHash: sentinel.attestation?.claimHash },
+      latencyMs: Date.now() - start,
+      payment,
+    };
+  }
 
   if (sentinel.verdict === "BLOCK") {
     return {

@@ -751,15 +751,21 @@ describe("sentinel objection_id", () => {
     assert.equal(again.structured_objections[0].objection_id, oid);
   });
 
-  it("does not change ALLOW or fail-closed execute semantics", () => {
-    const allow = envelope(
-      [{ criterion: LONG_CRITERION, reasoning: "ignored on allow" }],
-      receipt,
-      "ALLOW",
+  it("does not execute an unsigned ALLOW; non-ALLOW stays fail-closed", () => {
+    const allow = mapSentinelEnvelope(
+      {
+        id: receipt,
+        verdict: "ALLOW",
+        reasoning: "Insufficient evidence.",
+        objections: [{ criterion: LONG_CRITERION, reasoning: "ignored on allow" }],
+      },
+      undefined,
+      { env: {} },
     );
-    assert.equal(allow.verdict, "ALLOW");
-    assert.equal(allow.execute, true);
-    assert.deepEqual(allow.structured_objections, []);
+    assert.notEqual(allow.verdict, "ALLOW");
+    assert.equal(allow.execute, false);
+    assert.notEqual(allow.recommendation, "execute");
+    assert.ok(allow.structured_objections.some((o) => o.code === "SIGNED_EXPORT"));
 
     const uncertain = envelope(
       [{ step_id: "step_0", criterion: LONG_CRITERION, reasoning: "missing" }],

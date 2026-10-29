@@ -3,7 +3,10 @@
  *
  * Routes inside the tool (heuristic, no LLM) to DQL or Sentinel.
  * Does not call RV/PLV. Does not escalate verify_trade. Soft fail-closed:
- * execute is true ONLY on native ALLOW; the host is not hard-stopped.
+ * Sentinel execute is true ONLY when the signed export verifies, validUntil
+ * is fresh, and its verdict is ALLOW and matches the outer verdict.
+ * No flag can skip that. DQL execute is true ONLY on native aggregate ALLOW.
+ * execute is permission for the host, not proof the action was stopped.
  *
  * Structured objections + repair loop are envelope fields on this unpublished
  * tree. They do not invent DQL/Sentinel API schemas. Host must still honor
@@ -27,6 +30,11 @@ import {
   type SentinelResponse,
 } from "./sentinel-decision-client.js";
 import { routeDecision, type DecisionMode, type DecisionSurface } from "./route-decision.js";
+import {
+  gateOuterVerdict,
+  type SentinelBindingOptions,
+  type SignedExportVerification,
+} from "./signed-export.js";
 
 export type ObjectionSeverity = "block" | "blocked_until";
 export type RepairHint = "FRESH_EVIDENCE" | "REVISE_CLAIM" | "SUPERSEDE_MANDATE" | "NONE";
@@ -86,6 +94,14 @@ export interface DecisionEnvelope {
   structured_objections: StructuredObjection[];
   loop: LoopState;
   in_reply_to?: string;
+  /**
+   * Sentinel response field, cloned unchanged, when the response included it.
+   * Present on the Sentinel path so the host can re-verify. Omitted on DQL.
+   */
+  signed_export?: unknown;
+  signed_export_v2?: unknown;
+  /** Sentinel path only. Signature and freshness result for the export above. */
+  signed_export_verification?: SignedExportVerification;
 }
 
 export interface VerifyDecisionConfig {
@@ -98,6 +114,11 @@ export interface VerifyDecisionConfig {
   timeoutMs?: number;
   sandbox?: boolean;
   fetchImpl?: typeof fetch;
+  /**
+   * Clock, key pin, and vector-only override for the Sentinel signed-export
+   * check. This cannot disable the check. DQL does not use it.
+   */
+  signedBinding?: SentinelBindingOptions;
 }
 
 const REPAIR_PREFIX = "[ThoughtProof repair]";
@@ -343,8 +364,14 @@ export function mapDqlEnvelope(body: DqlResponse, inReplyTo?: string): DecisionE
   );
 }
 
-export function mapSentinelEnvelope(body: SentinelResponse, inReplyTo?: string): DecisionEnvelope {
-  const verdict = String(body.verdict ?? "ERROR");
+export function mapSentinelEnvelope(
+  body: SentinelResponse,
+  inReplyTo?: string,
+  binding?: SentinelBindingOptions,
+): DecisionEnvelope {
+  const gated = gateOuterVerdict(body.verdict, body, binding);
+  const verdict = gated.verdict;
+  const execute = gated.execute;
   const receipt_id = String(body.id ?? "");
   const objections: string[] = [];
   const structured: StructuredObjection[] = [];
@@ -371,6 +398,28 @@ export function mapSentinelEnvelope(body: SentinelResponse, inReplyTo?: string):
   }
   const reason = String(body.reasoning ?? "").trim();
   if (reason && !objections.includes(reason)) objections.push(reason);
+  const outerAllows = String(body.verdict ?? "").toUpperCase() === "ALLOW";
+  const bindingFailed =
+    !execute &&
+    gated.code !== "ok" &&
+    gated.code !== "signed_not_allow";
+  // Unsigned non-ALLOW fixtures keep their objection list. An ALLOW that is
+  // not backed by a matching signed export, or any present-but-bad export,
+  // must be visible as a rejection.
+  if (bindingFailed && (outerAllows || gated.code !== "missing_export")) {
+    const message = `signed export rejected (${gated.code})`;
+    if (!objections.includes(message)) objections.push(message);
+    structured.push({
+      objection_id: objectionId(receipt_id, "signed_export"),
+      code: "SIGNED_EXPORT",
+      severity: "block",
+      claim: "signed_export",
+      message,
+      repair_hints: ["NONE"],
+      axis_or_surface: "sentinel",
+      human_required: true,
+    });
+  }
   if (!executeAllowed(verdict) && structured.length === 0 && reason) {
     structured.push({
       objection_id: objectionId(receipt_id, "reasoning"),
@@ -387,12 +436,15 @@ export function mapSentinelEnvelope(body: SentinelResponse, inReplyTo?: string):
   return attachLoop(
     {
       verdict,
-      execute: executeAllowed(verdict),
+      execute,
       objections,
       receipt_id,
       surface: "sentinel",
       recommendation: recommend(verdict, objections, structured),
-      structured_objections: executeAllowed(verdict) ? [] : structured,
+      structured_objections: execute ? [] : structured,
+      ...(gated.has_signed_export ? { signed_export: gated.signed_export } : {}),
+      ...(gated.has_signed_export_v2 ? { signed_export_v2: gated.signed_export_v2 } : {}),
+      signed_export_verification: gated.verification,
     },
     inReplyTo,
   );
@@ -456,7 +508,7 @@ export async function verifyDecision(
       fetchImpl: cfg.fetchImpl,
     });
     if (!result.ok) return errorEnvelope("sentinel", result.error, "", inReplyTo);
-    return mapSentinelEnvelope(result.body, inReplyTo);
+    return mapSentinelEnvelope(result.body, inReplyTo, cfg.signedBinding);
   } catch (err) {
     return errorEnvelope(surface, String(err), "", inReplyTo);
   }
