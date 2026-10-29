@@ -14,6 +14,7 @@ import {
   buildExportSignedInput,
   canonicalJsonFlat,
   digestTransportedCanonical,
+  EXPORT_CLOCK_SKEW_SECONDS,
   signedBindingRequired,
 } from "../dist/signed-export.js";
 
@@ -59,8 +60,10 @@ function issue(privateKey, verdict, options = {}) {
     keyId,
     alg: "Ed25519",
     signedAt: options.signedAt ?? NOW,
-    validUntil: options.validUntil === null ? undefined : (options.validUntil ?? NOW + 60),
   };
+  if (options.validUntil !== null) {
+    fields.validUntil = options.validUntil ?? NOW + 60;
+  }
   const signature = `0x${sign(null, buildExportSignedInput(fields), privateKey).toString("hex")}`;
   return {
     exportSchema: "thoughtproof.sentinel.export.v1",
@@ -87,18 +90,18 @@ function response(verdict = "BLOCK") {
 }
 
 function bind(keys) {
-  return { keysDoc: keys, nowSeconds: NOW, requireSignedBinding: true, env: {} };
+  return { keysDoc: keys, nowSeconds: NOW, env: {} };
 }
 
 describe("signed export binding", () => {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
   const keys = keyDoc(publicKey);
 
-  it("requires signed binding by default", () => {
+  it("requires signed binding even when the old flag is off", () => {
     assert.equal(signedBindingRequired({}), true);
     assert.equal(signedBindingRequired({ TP_REQUIRE_SIGNED_BINDING: "1" }), true);
-    assert.equal(signedBindingRequired({ TP_REQUIRE_SIGNED_BINDING: "0" }), false);
-    assert.equal(signedBindingRequired({ TP_REQUIRE_SIGNED_BINDING: "false" }), false);
+    assert.equal(signedBindingRequired({ TP_REQUIRE_SIGNED_BINDING: "0" }), true);
+    assert.equal(signedBindingRequired({ TP_REQUIRE_SIGNED_BINDING: "false" }), true);
   });
 
   it("audit counterexample: signed BLOCK with outer ALLOW does not execute", () => {
@@ -150,6 +153,13 @@ describe("signed export binding", () => {
     assert.equal(envelope.execute, true);
     assert.equal(envelope.verdict, "ALLOW");
     assert.equal(envelope.recommendation, "execute");
+    assert.deepEqual(envelope.signed_export, artifact);
+    assert.equal(envelope.signed_export_verification.ok, true);
+    assert.equal(envelope.signed_export_verification.code, "ok");
+    assert.equal(envelope.signed_export_verification.signed_verdict, "ALLOW");
+    assert.equal(envelope.signed_export_verification.key_id, "local-test-only");
+    artifact.signature = "0x" + "ab".repeat(64);
+    assert.notEqual(envelope.signed_export.signature, artifact.signature);
   });
 
   it("does not upgrade a signed non-ALLOW, including when the outer verdict is ALLOW", () => {
@@ -288,18 +298,93 @@ describe("signed export binding", () => {
     assert.notEqual(envelope.verdict, "ALLOW");
   });
 
-  it("compatibility flag defaults fail-closed and can trust the outer verdict only when set off", () => {
-    const unsigned = mapSentinelEnvelope(response("ALLOW"), undefined, {
-      env: {},
-    });
-    assert.equal(unsigned.execute, false);
+  it("no flag lets an outer ALLOW override a present signed BLOCK", () => {
+    const artifact = issue(privateKey, "BLOCK");
+    const envelope = mapSentinelEnvelope(
+      { ...response("BLOCK"), signed_export: artifact, verdict: "ALLOW" },
+      undefined,
+      {
+        keysDoc: keys,
+        nowSeconds: NOW,
+        requireSignedBinding: false,
+        env: { TP_REQUIRE_SIGNED_BINDING: "0" },
+      },
+    );
+    assert.equal(envelope.execute, false);
+    assert.notEqual(envelope.verdict, "ALLOW");
+    assert.deepEqual(envelope.signed_export, artifact);
+    assert.equal(envelope.signed_export_verification.ok, true);
+    assert.equal(envelope.signed_export_verification.code, "verdict_mismatch");
+    assert.equal(envelope.signed_export_verification.signed_verdict, "BLOCK");
+  });
 
-    const legacy = mapSentinelEnvelope(response("ALLOW"), undefined, {
-      requireSignedBinding: false,
-      env: { TP_REQUIRE_SIGNED_BINDING: "0" },
-    });
-    assert.equal(legacy.execute, true);
-    assert.equal(legacy.verdict, "ALLOW");
+  it("a signed ALLOW without validUntil does not execute", () => {
+    const artifact = issue(privateKey, "ALLOW", { validUntil: null });
+    assert.equal("validUntil" in artifact, false);
+    const envelope = mapSentinelEnvelope(
+      { ...response("ALLOW"), signed_export: artifact },
+      undefined,
+      bind(keys),
+    );
+    assert.equal(envelope.execute, false);
+    assert.notEqual(envelope.verdict, "ALLOW");
+    assert.equal(envelope.signed_export_verification.ok, false);
+    assert.equal(envelope.signed_export_verification.code, "validUntil_required");
+    assert.deepEqual(envelope.signed_export, artifact);
+  });
+
+  it("clock skew keeps a signed ALLOW fresh on the inside edge and expired one second later", () => {
+    const artifact = issue(privateKey, "ALLOW", { validUntil: NOW });
+    const inside = mapSentinelEnvelope(
+      { ...response("ALLOW"), signed_export: artifact },
+      undefined,
+      { keysDoc: keys, nowSeconds: NOW + EXPORT_CLOCK_SKEW_SECONDS, env: {} },
+    );
+    assert.equal(inside.execute, true);
+    assert.equal(inside.signed_export_verification.code, "ok");
+
+    const outside = mapSentinelEnvelope(
+      { ...response("ALLOW"), signed_export: artifact },
+      undefined,
+      { keysDoc: keys, nowSeconds: NOW + EXPORT_CLOCK_SKEW_SECONDS + 1, env: {} },
+    );
+    assert.equal(outside.execute, false);
+    assert.notEqual(outside.verdict, "ALLOW");
+    assert.equal(outside.signed_export_verification.ok, false);
+    assert.equal(outside.signed_export_verification.code, "expired");
+    assert.deepEqual(outside.signed_export, artifact);
+  });
+
+  // Skipped on purpose. Unskip to observe the current gap. This is not a
+  // permanent acceptance test: the next change must bind the export to the
+  // mandate and the proposed action.
+  it.skip("known gap: one signed ALLOW returns execute true for deploy staging and delete production database", async () => {
+    const artifact = issue(privateKey, "ALLOW");
+    const body = JSON.stringify({ ...response("ALLOW"), signed_export: artifact });
+    const results = [];
+    for (const proposed_action of ["deploy staging", "delete production database"]) {
+      results.push(await verifyDecision(
+        {
+          mandate: "Operate the production service",
+          proposed_action,
+          reasoning: "operator request",
+          mode: "sentinel",
+        },
+        {
+          sentinelApiKey: FIX_SENTINEL,
+          signedBinding: bind(keys),
+          fetchImpl: async () =>
+            new Response(body, { status: 200, headers: { "Content-Type": "application/json" } }),
+        },
+      ));
+    }
+    assert.equal(results[0].execute, true);
+    assert.equal(results[1].execute, true);
+    assert.equal(results[0].verdict, "ALLOW");
+    assert.equal(results[1].verdict, "ALLOW");
+    assert.deepEqual(results[0].signed_export, results[1].signed_export);
+    assert.notEqual(results[0].signed_export.canonical.includes("deploy staging"), true);
+    assert.notEqual(results[0].signed_export.canonical.includes("delete production database"), true);
   });
 
   it("maps Sentinel 401, 429, and 5xx to execute false", async () => {

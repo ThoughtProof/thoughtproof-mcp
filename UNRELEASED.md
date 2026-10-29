@@ -2,9 +2,13 @@
 
 ## Signed export binding (unpublished tree)
 
-`verify_before_action` / `verify_decision` (Sentinel route) and `verify_trade`'s Sentinel client no longer treat the outer `verdict` as sufficient. `execute: true` requires a `signed_export` (and `signed_export_v2` when present) whose Ed25519 signature verifies under the pinned public export keys, whose `verificationId` matches the response id, and whose canonical verdict is `ALLOW` and matches the outer verdict. Missing, invalid, expired, or unverifiable signatures, verdict mismatches, and HTTP 401 / 429 / 5xx stay `execute: false`. A valid signature of BLOCK or UNCERTAIN does not become ALLOW.
+`verify_before_action` / `verify_decision` (Sentinel route) and `verify_trade`'s Sentinel client no longer treat the outer `verdict` as sufficient. On that path, `execute: true` requires a `signed_export` (and `signed_export_v2` when present) whose Ed25519 signature verifies under the pinned public export keys, whose `verificationId` matches the response id, whose `validUntil` is present and still inside a 30-second clock-skew allowance, and whose canonical verdict is `ALLOW` and matches the outer verdict. Missing, invalid, expired, or unverifiable signatures, a missing `validUntil`, verdict mismatches, and HTTP 401 / 429 / 5xx stay `execute: false`. A valid signature of BLOCK or UNCERTAIN does not become ALLOW. No flag can turn execute back on.
 
-The verification public key is not `X-Sentinel-Key`. It is the pinned copy of Sentinel `thoughtproof-keys.json` (`/.well-known/thoughtproof-keys.json`). `validation-keys.json` is a different trust root and is not accepted for `signed_export`. `TP_REQUIRE_SIGNED_BINDING` defaults to required. Set it to `0` only as a compatibility escape that trusts the outer verdict again. `SENTINEL_EXPORT_KEYS_JSON` may replace the export pin with a public key document. No package version bump and no npm publish.
+The Sentinel envelope returns the presented `signed_export` / `signed_export_v2` unchanged, plus `signed_export_verification`, so the host can re-verify. `execute: true` is permission for the host, not proof the action was stopped. DQL aggregate ALLOW and a verified Sentinel UNCERTAIN that escalates to RV follow different rules.
+
+The same signed ALLOW still returns `execute: true` for a different proposed action (for example deploy staging and delete production database). Action and mandate binding is the next change, not this one.
+
+The verification public key is not `X-Sentinel-Key`. It is the pinned copy of Sentinel `thoughtproof-keys.json` (`/.well-known/thoughtproof-keys.json`). `validation-keys.json` is a different trust root and is not accepted for `signed_export`. `TP_REQUIRE_SIGNED_BINDING` is ignored for execute; an off value is logged once. `SENTINEL_EXPORT_KEYS_JSON` may replace the export pin with a public key document. No package version bump and no npm publish.
 
 ## Claim framing + host-declared kinds (unpublished tree)
 

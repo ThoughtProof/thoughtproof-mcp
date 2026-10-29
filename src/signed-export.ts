@@ -5,15 +5,16 @@
  *   key window vs signedAt → Ed25519(domain || 0x00 || JCS(fields)) →
  *   sha256(transported canonical) → validUntil vs verifier clock.
  *
- * execute is granted only by gateOuterVerdict, and only when the signed
- * verdict is ALLOW and matches the outer verdict. A valid signature never
- * promotes BLOCK / UNCERTAIN / anything else to ALLOW.
+ * On the Sentinel path, execute is granted only by gateOuterVerdict, and only
+ * when the signed verdict is ALLOW, validUntil is still fresh, and that
+ * verdict matches the outer verdict. A valid signature never promotes
+ * BLOCK / UNCERTAIN / anything else to ALLOW. No flag can skip this.
  *
  * Key material is the pinned public documents in sentinel-key-pin.ts.
  * SENTINEL_API_KEY / X-Sentinel-Key is an API credential, not this key.
  * Optional SENTINEL_EXPORT_KEYS_JSON replaces the export pin (public keys
- * only). TP_REQUIRE_SIGNED_BINDING defaults to required; "0" is the
- * compatibility escape.
+ * only). TP_REQUIRE_SIGNED_BINDING is ignored for execute; if set off, it
+ * is logged and does not change the decision.
  */
 
 import {
@@ -34,23 +35,29 @@ export const EXPORT_ALG = "Ed25519";
 export const SCHEMA_V1 = "sentinel.verdict.canonical.v1";
 export const SCHEMA_V2 = "sentinel.verdict.canonical.v2";
 
-/** Unset means required. Only an explicit off value trusts the outer verdict. */
+/**
+ * Historical switch. It does not change execute. An off value is logged
+ * and the Sentinel path still requires a verified signed ALLOW.
+ */
 export const SIGNED_BINDING_ENV = "TP_REQUIRE_SIGNED_BINDING";
 /** Public export-key document. Replaces the in-repo pin when set. */
 export const EXPORT_KEYS_JSON_ENV = "SENTINEL_EXPORT_KEYS_JSON";
+/**
+ * Verifier clock may be this many seconds ahead of validUntil.
+ * now === validUntil + skew is still fresh. One second later is expired.
+ */
+export const EXPORT_CLOCK_SKEW_SECONDS = 30;
 
 const ACCEPTED_SCHEMAS = new Set([SCHEMA_V1, SCHEMA_V2]);
 
 export interface SentinelBindingOptions {
-  /** Default: signedBindingRequired(env). */
-  requireSignedBinding?: boolean;
   /** Test or operator export-key document. Public keys only. */
   keysDoc?: ExportKeysDoc;
   /** Verifier clock, unix seconds. Default: now. */
   nowSeconds?: number;
   /** Accept status=vector-only. Default false. Not an env flag. */
   allowVectorOnly?: boolean;
-  /** When set, flag and keys JSON are read from here instead of process.env. */
+  /** When set, keys JSON and the ignored binding flag are read from here. */
   env?: NodeJS.ProcessEnv;
 }
 
@@ -61,10 +68,24 @@ export interface BindingAssessment {
   keyId?: string;
 }
 
+/** Result the host can use to re-verify. `ok` is signature, key, digest, receipt, and freshness. */
+export interface SignedExportVerification {
+  ok: boolean;
+  code: string;
+  key_id?: string;
+  signed_verdict?: string;
+}
+
 export interface OuterVerdictGate {
   verdict: string;
   execute: boolean;
   code: string;
+  /** Original response field, cloned. Absent when the response omitted it. */
+  signed_export?: unknown;
+  signed_export_v2?: unknown;
+  has_signed_export: boolean;
+  has_signed_export_v2: boolean;
+  verification: SignedExportVerification;
 }
 
 interface SignedFields {
@@ -82,12 +103,27 @@ function bindingEnv(options?: SentinelBindingOptions): NodeJS.ProcessEnv {
   return options?.env ?? process.env;
 }
 
-export function signedBindingRequired(env: NodeJS.ProcessEnv = process.env): boolean {
+let notedIgnoredBindingFlag = false;
+
+function bindingFlagIsOff(env: NodeJS.ProcessEnv): boolean {
   const raw = env[SIGNED_BINDING_ENV];
-  if (raw === undefined || String(raw).trim() === "") return true;
+  if (raw === undefined || String(raw).trim() === "") return false;
   const value = String(raw).trim().toLowerCase();
-  if (value === "0" || value === "false" || value === "off" || value === "no") return false;
+  return value === "0" || value === "false" || value === "off" || value === "no";
+}
+
+/** Always required. Kept so callers can see the flag no longer opens execute. */
+export function signedBindingRequired(_env: NodeJS.ProcessEnv = process.env): boolean {
   return true;
+}
+
+/** Log once when an operator sets the old bypass. Does not change execute. */
+export function noteIgnoredBindingFlag(env: NodeJS.ProcessEnv = process.env): void {
+  if (!bindingFlagIsOff(env) || notedIgnoredBindingFlag) return;
+  notedIgnoredBindingFlag = true;
+  console.error(
+    "[thoughtproof-mcp] TP_REQUIRE_SIGNED_BINDING is ignored. Sentinel execute requires a verified signed ALLOW.",
+  );
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -297,8 +333,12 @@ function verifyArtifact(
     return fail("digest_mismatch", keyId);
   }
 
+  if (fields.validUntil === undefined) {
+    return fail("validUntil_required", keyId);
+  }
   const now = options?.nowSeconds ?? Math.floor(Date.now() / 1000);
-  if (fields.validUntil !== undefined && now > fields.validUntil) {
+  // Fresh through validUntil + skew. The next second is expired.
+  if (now > fields.validUntil + EXPORT_CLOCK_SKEW_SECONDS) {
     return fail("expired", keyId);
   }
 
@@ -378,46 +418,95 @@ export function assessSentinelBinding(
   return { ok: true, code: "ok", signedVerdict, keyId };
 }
 
+function clonePresented(value: unknown): unknown {
+  try {
+    return structuredClone(value);
+  } catch {
+    return value;
+  }
+}
+
+function presentedExport(body: unknown, field: "signed_export" | "signed_export_v2"): {
+  present: boolean;
+  value?: unknown;
+} {
+  if (!isPlainObject(body) || !Object.prototype.hasOwnProperty.call(body, field)) {
+    return { present: false };
+  }
+  return { present: true, value: clonePresented(body[field]) };
+}
+
+function verificationOf(
+  assessed: BindingAssessment,
+  code: string,
+  ok: boolean,
+): SignedExportVerification {
+  const verification: SignedExportVerification = { ok, code };
+  if (assessed.keyId) verification.key_id = assessed.keyId;
+  if (assessed.signedVerdict) verification.signed_verdict = assessed.signedVerdict;
+  return verification;
+}
+
 /**
- * execute is true only when binding is satisfied and the signed verdict is ALLOW.
- * On mismatch, the reported verdict is the non-ALLOW side.
- * When binding is disabled, the outer verdict is trusted (compatibility only).
+ * Sentinel execute is true only when the signed verdict is ALLOW, fresh,
+ * and equal to the outer verdict. The presented export is copied unchanged
+ * so the host can re-verify it. The old binding flag is not consulted.
  */
 export function gateOuterVerdict(
   outerVerdict: unknown,
   body: unknown,
   options?: SentinelBindingOptions,
 ): OuterVerdictGate {
+  noteIgnoredBindingFlag(bindingEnv(options));
   const outer = String(outerVerdict ?? "ERROR");
-  const required = options?.requireSignedBinding ?? signedBindingRequired(bindingEnv(options));
-  if (!required) {
-    return {
-      verdict: outer,
-      execute: outer.toUpperCase() === "ALLOW",
-      code: "binding_not_required",
-    };
-  }
+  const v1 = presentedExport(body, "signed_export");
+  const v2 = presentedExport(body, "signed_export_v2");
+  const presented = {
+    ...(v1.present ? { signed_export: v1.value } : {}),
+    ...(v2.present ? { signed_export_v2: v2.value } : {}),
+    has_signed_export: v1.present,
+    has_signed_export_v2: v2.present,
+  };
 
   const assessed = assessSentinelBinding(body, options);
   if (!assessed.ok) {
-    if (outer.toUpperCase() === "ALLOW") {
-      return { verdict: "ERROR", execute: false, code: assessed.code };
-    }
-    return { verdict: outer, execute: false, code: assessed.code };
+    const verdict = outer.toUpperCase() === "ALLOW" ? "ERROR" : outer;
+    return {
+      verdict,
+      execute: false,
+      code: assessed.code,
+      ...presented,
+      verification: verificationOf(assessed, assessed.code, false),
+    };
   }
 
   const signed = assessed.signedVerdict ?? "";
   if (signed.toUpperCase() !== outer.toUpperCase()) {
     const reported = signed.toUpperCase() === "ALLOW" ? outer : signed;
+    const verdict = reported.toUpperCase() === "ALLOW" ? "ERROR" : reported;
     return {
-      verdict: reported.toUpperCase() === "ALLOW" ? "ERROR" : reported,
+      verdict,
       execute: false,
       code: "verdict_mismatch",
+      ...presented,
+      verification: verificationOf(assessed, "verdict_mismatch", true),
     };
   }
 
   if (signed.toUpperCase() === "ALLOW") {
-    return { verdict: "ALLOW", execute: true, code: "ok" };
+    return {
+      verdict: "ALLOW",
+      execute: true,
+      code: "ok",
+      ...presented,
+      verification: verificationOf(assessed, "ok", true),
+    };
   }
-  return { verdict: outer, execute: false, code: "signed_not_allow" };
+  return {
+    verdict: outer,
+    execute: false,
+    code: "signed_not_allow",
+    ...presented,
+    verification: verificationOf(assessed, "signed_not_allow", true),
+  };
 }

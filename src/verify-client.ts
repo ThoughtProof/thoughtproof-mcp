@@ -189,8 +189,7 @@ async function callSentinel(
   const blocksEscalation =
     !gated.execute &&
     gated.code !== "ok" &&
-    gated.code !== "signed_not_allow" &&
-    gated.code !== "binding_not_required";
+    gated.code !== "signed_not_allow";
   const result: SentinelResult = {
     verdict,
     confidence: Number(d.confidence ?? 0),

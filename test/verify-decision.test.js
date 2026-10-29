@@ -760,7 +760,7 @@ describe("sentinel objection_id", () => {
         objections: [{ criterion: LONG_CRITERION, reasoning: "ignored on allow" }],
       },
       undefined,
-      { requireSignedBinding: true, env: {} },
+      { env: {} },
     );
     assert.notEqual(allow.verdict, "ALLOW");
     assert.equal(allow.execute, false);

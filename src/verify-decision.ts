@@ -3,9 +3,10 @@
  *
  * Routes inside the tool (heuristic, no LLM) to DQL or Sentinel.
  * Does not call RV/PLV. Does not escalate verify_trade. Soft fail-closed:
- * Sentinel execute is true ONLY when the signed export verifies and its
- * verdict is ALLOW and matches the outer verdict. DQL execute is true ONLY
- * on native aggregate ALLOW. The host is not hard-stopped.
+ * Sentinel execute is true ONLY when the signed export verifies, validUntil
+ * is fresh, and its verdict is ALLOW and matches the outer verdict.
+ * No flag can skip that. DQL execute is true ONLY on native aggregate ALLOW.
+ * execute is permission for the host, not proof the action was stopped.
  *
  * Structured objections + repair loop are envelope fields on this unpublished
  * tree. They do not invent DQL/Sentinel API schemas. Host must still honor
@@ -32,6 +33,7 @@ import { routeDecision, type DecisionMode, type DecisionSurface } from "./route-
 import {
   gateOuterVerdict,
   type SentinelBindingOptions,
+  type SignedExportVerification,
 } from "./signed-export.js";
 
 export type ObjectionSeverity = "block" | "blocked_until";
@@ -92,6 +94,14 @@ export interface DecisionEnvelope {
   structured_objections: StructuredObjection[];
   loop: LoopState;
   in_reply_to?: string;
+  /**
+   * Sentinel response field, cloned unchanged, when the response included it.
+   * Present on the Sentinel path so the host can re-verify. Omitted on DQL.
+   */
+  signed_export?: unknown;
+  signed_export_v2?: unknown;
+  /** Sentinel path only. Signature and freshness result for the export above. */
+  signed_export_verification?: SignedExportVerification;
 }
 
 export interface VerifyDecisionConfig {
@@ -105,8 +115,8 @@ export interface VerifyDecisionConfig {
   sandbox?: boolean;
   fetchImpl?: typeof fetch;
   /**
-   * Sentinel signed-export check. Default is fail-closed
-   * (TP_REQUIRE_SIGNED_BINDING unset). DQL does not use this.
+   * Clock, key pin, and vector-only override for the Sentinel signed-export
+   * check. This cannot disable the check. DQL does not use it.
    */
   signedBinding?: SentinelBindingOptions;
 }
@@ -392,7 +402,6 @@ export function mapSentinelEnvelope(
   const bindingFailed =
     !execute &&
     gated.code !== "ok" &&
-    gated.code !== "binding_not_required" &&
     gated.code !== "signed_not_allow";
   // Unsigned non-ALLOW fixtures keep their objection list. An ALLOW that is
   // not backed by a matching signed export, or any present-but-bad export,
@@ -433,6 +442,9 @@ export function mapSentinelEnvelope(
       surface: "sentinel",
       recommendation: recommend(verdict, objections, structured),
       structured_objections: execute ? [] : structured,
+      ...(gated.has_signed_export ? { signed_export: gated.signed_export } : {}),
+      ...(gated.has_signed_export_v2 ? { signed_export_v2: gated.signed_export_v2 } : {}),
+      signed_export_verification: gated.verification,
     },
     inReplyTo,
   );
