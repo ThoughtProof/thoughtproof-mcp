@@ -45,9 +45,17 @@ describe("thoughtproof-mcp server", () => {
       "value_transfer",
       "permission",
       "deploy_ship",
+      "local_command",
       "unknown",
     ]);
     assert.deepEqual(props.action_kind.enum, props.mandate_kind.enum);
+    assert.match(decision.description ?? "", /local_command/);
+    assert.match(props.mandate_kind.description ?? "", /local_command/);
+    assert.match(props.action_kind.description ?? "", /local_command/);
+    assert.match(props.mode.description ?? "", /command-form/);
+    const alias = tools.find((t) => t.name === "verify_before_action");
+    assert.deepEqual(alias.inputSchema.properties.action_kind.enum, props.action_kind.enum);
+    assert.equal(alias.description, decision.description);
     assert.ok(props.mode, "missing mode property");
     assert.ok(
       /must NOT put the overshoot/i.test(decision.description ?? ""),

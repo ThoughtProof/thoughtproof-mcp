@@ -1,5 +1,19 @@
 # Unpublished 0.4.0-dev
 
+## Local command kind (unpublished tree)
+
+`verify_before_action` / `verify_decision` accept ActionKind `local_command` on `mandate_kind` and `action_kind` (local shell / coding-agent commands). Enum: `informational | value_transfer | permission | deploy_ship | local_command | unknown`. Omit rather than guess. Invalid values still fail closed (`HOST_KIND_INVALID`) and do not call Sentinel.
+
+**mode=auto** sends the call to Sentinel when `proposed_action` is command form, or when `action_kind` is exactly `local_command`. Command form means a `run_command:` label, a shell prompt line (`$` then a command), or a fenced code block (three backticks). That check runs before the spend heuristic, so a word like "budget" in the mandate does not keep a shell action on DQL. Explicit `mode` still wins. Spend, high-blast, and unsure routing are unchanged when the action is not command form. Markers in `reasoning` or `context`, and `mandate_kind=local_command` alone, do not change the route. A bare command such as `git status` with no marker and no `action_kind` still follows the old heuristic (unsure → DQL).
+
+This MCP does not classify the command (read-only vs destructive). Routing to Sentinel is not authorization. `execute: true` still requires a verified signed ALLOW.
+
+Structured mandate fields (`granted.workspace`, `granted.allowRemoteWrite`, `granted.allowNetwork`, `action.command`, `action.cwd`) are not sent, and no defaults are invented for them. Current Sentinel reconstructs `mandate.granted` / `mandate.action` and drops those keys, so sending them would not bind. `allowRemoteWrite` / `allowNetwork` stay Sentinel's own defaults.
+
+**Compatibility with a Sentinel that does not know `local_command`:** the outbound body gains no new top-level fields. A command-form call that omits kinds is the existing `mode=action_authorization` body; today's Sentinel accepts it and applies the current kind gate (command prose is typically not ALLOW). A host-declared `local_command` is forwarded as `mandate.kind` / `mandate.action.kind` and is not rewritten to `unknown` or `informational`. Today's validator rejects that value with HTTP 400; this MCP maps the error to `verdict: ERROR`, `execute: false`, one request, no DQL fallback, and no retry. A missing Sentinel key on this route is `execute: false` (`Sentinel key not configured`) and does not call DQL.
+
+No version bump, no npm publish, no deploy.
+
 ## Signed export binding (unpublished tree)
 
 `verify_before_action` / `verify_decision` (Sentinel route) and `verify_trade`'s Sentinel client no longer treat the outer `verdict` as sufficient. On that path, `execute: true` requires a `signed_export` (and `signed_export_v2` when present) whose Ed25519 signature verifies under the pinned public export keys, whose `verificationId` matches the response id, whose `validUntil` is present and still inside a 30-second clock-skew allowance, and whose canonical verdict is `ALLOW` and matches the outer verdict. Missing, invalid, expired, or unverifiable signatures, a missing `validUntil`, verdict mismatches, and HTTP 401 / 429 / 5xx stay `execute: false`. A valid signature of BLOCK or UNCERTAIN does not become ALLOW. No flag can turn execute back on.
@@ -16,7 +30,7 @@ The verification public key is not `X-Sentinel-Key`. It is the pinned copy of Se
 
 `verify_before_action` / `verify_decision` (Sentinel `mode=action_authorization`) now set `claim` to **`"<proposed_action> is authorized by the principal's mandate"`** so the cascade scores authorization, not a restatement of the action (issue #21 / Sentinel #36).
 
-Optional MCP fields **`mandate_kind`** / **`action_kind`** (`informational` | `value_transfer` | `permission` | `deploy_ship` | `unknown`) are the host encoding of Sentinel #51 `mandate.kind` / `action.kind`. They are **not inferred** when omitted — prefer explicit params over a silent wrong guess. Invalid values fail closed (`HOST_KIND_INVALID`, `execute: false`) and do not call Sentinel.
+Optional MCP fields **`mandate_kind`** / **`action_kind`** (`informational` | `value_transfer` | `permission` | `deploy_ship` | `local_command` | `unknown`) are the host encoding of Sentinel #51 `mandate.kind` / `action.kind`. They are **not inferred** when omitted — prefer explicit params over a silent wrong guess. Invalid values fail closed (`HOST_KIND_INVALID`, `execute: false`) and do not call Sentinel. `local_command` routing and compatibility with a Sentinel that does not know the kind yet are in the section above.
 
 Wire format (live-safe; no new top-level fields outside OpenAPI):
 
