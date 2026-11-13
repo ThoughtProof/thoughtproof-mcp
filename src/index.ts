@@ -32,6 +32,7 @@ import { defaultPayToFallback, parseX402PaymentRequired } from "./x402-challenge
 
 const API_BASE = process.env.THOUGHTPROOF_BASE_URL || "https://api.thoughtproof.ai";
 const API_KEY = process.env.THOUGHTPROOF_API_KEY || "";
+const ACTION_KIND_LIST = ACTION_KINDS.join(" | ");
 
 // --- API Client ---
 
@@ -99,7 +100,7 @@ const server = new McpServer({
 
 // Hero tool: pre-action verification gate.
 // Canonical name: verify_decision. Alias: verify_before_action (same handler).
-// Routes DQL (spend) or Sentinel (irreversible exit).
+// Routes DQL (spend) or Sentinel (irreversible exit, or a local command).
 // Sentinel execute=true only for a verified signed ALLOW that matches the response.
 // Auth path unchanged: resolveDqlCredential (dqlk_ / dqla_ / DQL_ACCOUNT_TOKEN).
 const VERIFY_BEFORE_ACTION_DESCRIPTION =
@@ -114,7 +115,10 @@ const VERIFY_BEFORE_ACTION_DESCRIPTION =
   '(for example, do not write "price is above the cap"). Put the user goal in mandate, the action you are about to take ' +
   "in proposed_action, and your plan in reasoning — the verifier must find the mismatch. " +
   "Optional mandate_kind / action_kind declare Sentinel ActionKind " +
-  "(informational | value_transfer | permission | deploy_ship | unknown) — omit rather than guess. " +
+  `(${ACTION_KIND_LIST}) — omit rather than guess. ` +
+  "local_command is a local shell or coding-agent command. " +
+  "On mode=auto, a command-form proposed_action (run_command:, a $ prompt line, or a fenced code block) " +
+  "or action_kind=local_command routes to Sentinel. That routes the check; it does not authorize the command. " +
   "Replan = new call = new receipt. Aliases: verify_decision, verify_before_action, verify_before_act.";
 
 const verifyBeforeActionSchema = {
@@ -151,7 +155,8 @@ const verifyBeforeActionSchema = {
     .optional()
     .describe(
       "Optional host-declared Sentinel ActionKind for the mandate (mandate.kind). " +
-        "Values: informational | value_transfer | permission | deploy_ship | unknown. " +
+        `Values: ${ACTION_KIND_LIST}. ` +
+        "local_command means the mandate is about local shell or coding-agent work. " +
         "Sentinel prefers this over prose classification. Omit rather than guess."
     ),
   action_kind: z
@@ -159,14 +164,16 @@ const verifyBeforeActionSchema = {
     .optional()
     .describe(
       "Optional host-declared Sentinel ActionKind for the proposed action (action.kind). " +
-        "Values: informational | value_transfer | permission | deploy_ship | unknown. " +
+        `Values: ${ACTION_KIND_LIST}. ` +
+        "local_command is a local shell or coding-agent command. " +
+        "On mode=auto, action_kind=local_command routes to Sentinel. " +
         "Sentinel prefers this over prose classification. Omit rather than guess."
     ),
   mode: z
     .enum(["dql", "sentinel", "auto"])
     .optional()
     .describe(
-      "Routing override. auto (default) picks DQL for spend/checkout language and Sentinel for high-blast irreversible exits; unsure → DQL. Explicit mode wins."
+      "Routing override. auto (default) picks Sentinel for a command-form proposed_action (run_command:, a $ prompt line, or a fenced code block) or action_kind=local_command, DQL for spend/checkout language, and Sentinel for high-blast irreversible exits; unsure → DQL. Explicit mode wins."
     ),
   in_reply_to: z
     .string()

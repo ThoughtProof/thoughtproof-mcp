@@ -20,6 +20,7 @@ export const ACTION_KINDS = [
   "value_transfer",
   "permission",
   "deploy_ship",
+  "local_command",
   "unknown",
 ] as const;
 
@@ -284,6 +285,11 @@ export interface SentinelVerifyBody {
    * Sentinel #51/#60 reads `mandate.kind` and nested `mandate.action.kind`
    * (MCP `action.kind` maps onto the latter). No top-level `action` field —
    * that is not on the live whitelist. Kinds are never echoed into evidence.
+   * `local_command` uses this same shape. Structured local-command fields
+   * (`granted.workspace`, `granted.allowRemoteWrite`, `granted.allowNetwork`,
+   * `action.command`, `action.cwd`) are not sent: current Sentinel
+   * reconstructs `granted` / `action` and drops those keys, and this client
+   * does not invent defaults for them.
    */
   mandate?: {
     kind?: ActionKind;

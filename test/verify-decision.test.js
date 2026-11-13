@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { routeDecision } from "../dist/route-decision.js";
+import { isCommandFormAction, routeDecision } from "../dist/route-decision.js";
 import {
   buildDqlAuthHeaders,
   callDql,
@@ -168,6 +168,139 @@ describe("routeDecision heuristic", () => {
         mandate: "Summarize the meeting notes",
         proposed_action: "Write a short recap",
         reasoning: "Highlight the action items",
+      }),
+      "dql"
+    );
+  });
+
+  it("keeps spend ahead of high-blast when the action is not command form", () => {
+    assert.equal(
+      routeDecision({
+        mandate: "Deploy the API under the budget cap",
+        proposed_action: "Publish the release after payment",
+        reasoning: "Ship it once the invoice is paid",
+      }),
+      "dql"
+    );
+  });
+
+  it("routes command-form actions to sentinel ahead of spend language", () => {
+    assert.equal(
+      routeDecision({
+        mandate: "Arms C/D: run with identical budget E",
+        proposed_action: "run_command: git status --short",
+        reasoning: "Inspect the working tree",
+      }),
+      "sentinel"
+    );
+    assert.equal(
+      routeDecision({
+        mandate: "Pay the invoice under budget",
+        proposed_action: "```\nnpm test\n```",
+        reasoning: "Run the suite",
+      }),
+      "sentinel"
+    );
+    assert.equal(
+      routeDecision({
+        mandate: "Note the checkout price",
+        proposed_action: "$ git diff -- harness/stall_rule.py",
+        reasoning: "Read the diff",
+        mode: "auto",
+      }),
+      "sentinel"
+    );
+    assert.equal(
+      routeDecision({
+        mandate: "Inspect the repo",
+        proposed_action: "  $ git status",
+        reasoning: "Read-only status",
+      }),
+      "sentinel"
+    );
+    assert.equal(
+      routeDecision({
+        mandate: "Inspect the repo",
+        proposed_action: "Check status\n$ git status --short",
+        reasoning: "Read-only status",
+      }),
+      "sentinel"
+    );
+    assert.equal(
+      routeDecision({
+        mandate: "Inspect the repo",
+        proposed_action: "Run_Command: git status",
+        reasoning: "Read-only status",
+      }),
+      "sentinel"
+    );
+  });
+
+  it("routes action_kind=local_command to sentinel even when the prose is spend or unsure", () => {
+    assert.equal(
+      routeDecision({
+        mandate: "Summarize the meeting notes",
+        proposed_action: "Write a short recap",
+        reasoning: "Highlight the action items",
+        action_kind: "local_command",
+      }),
+      "sentinel"
+    );
+    assert.equal(
+      routeDecision({
+        mandate: "Buy milk under $5",
+        proposed_action: "Purchase milk for $4",
+        reasoning: "It is under the budget",
+        action_kind: "  local_command  ",
+      }),
+      "sentinel"
+    );
+  });
+
+  it("does not treat non-action command markers or a bare command as command form", () => {
+    assert.equal(isCommandFormAction("git status --short"), false);
+    assert.equal(isCommandFormAction("run_command git status"), false);
+    assert.equal(isCommandFormAction("Purchase LH1234 for $180"), false);
+    assert.equal(isCommandFormAction("The fare is $ 180"), false);
+    assert.equal(isCommandFormAction("$180 flight"), false);
+    assert.equal(isCommandFormAction("mention `git status` in the recap"), false);
+
+    assert.equal(
+      routeDecision({
+        mandate: "Summarize the meeting notes",
+        proposed_action: "Write a short recap",
+        reasoning: "run_command: git status",
+        context: "```\ngit status\n```",
+        mandate_kind: "local_command",
+      }),
+      "dql"
+    );
+    assert.equal(
+      routeDecision({
+        mandate: "Inspect the repo",
+        proposed_action: "git status --short",
+        reasoning: "Read-only status",
+      }),
+      "dql"
+    );
+    assert.equal(
+      routeDecision({
+        mandate: "Note the price",
+        proposed_action: "The fare is $ 180",
+        reasoning: "Record it",
+      }),
+      "dql"
+    );
+  });
+
+  it("lets explicit mode=dql win over command form and local_command", () => {
+    assert.equal(
+      routeDecision({
+        mandate: "Inspect the repo",
+        proposed_action: "run_command: git status",
+        reasoning: "Read-only",
+        action_kind: "local_command",
+        mode: "dql",
       }),
       "dql"
     );
@@ -353,11 +486,16 @@ describe("host-declared mandate.kind / action.kind (Sentinel #51 wire)", () => {
       "value_transfer",
       "permission",
       "deploy_ship",
+      "local_command",
       "unknown",
     ]);
     assert.equal(parseActionKind("deploy_ship"), "deploy_ship");
     assert.equal(parseActionKind("  informational  "), "informational");
     assert.equal(parseActionKind("unknown"), "unknown");
+    assert.equal(parseActionKind("local_command"), "local_command");
+    assert.equal(parseActionKind("  local_command  "), "local_command");
+    assert.equal(parseActionKind("LOCAL_COMMAND"), undefined);
+    assert.equal(parseActionKind("shell"), undefined);
     assert.equal(parseActionKind(""), undefined);
     assert.equal(parseActionKind("ship"), undefined);
     assert.equal(parseActionKind("DEPLOY_SHIP"), undefined);
@@ -409,6 +547,38 @@ describe("host-declared mandate.kind / action.kind (Sentinel #51 wire)", () => {
     assert.doesNotMatch(body.evidence, /mandate\.kind:\s*informational/);
     assert.doesNotMatch(body.evidence, /action\.kind:\s*informational/);
     assert.doesNotMatch(body.evidence, /mandate\.kind:\s*deploy_ship/);
+  });
+
+  it("forwards local_command on the existing mandate shape and invents no command fields", () => {
+    const body = buildSentinelVerifyBody({
+      ...shipNotify,
+      mandate_kind: "local_command",
+      action_kind: "  local_command  ",
+    });
+    assert.deepEqual(body.mandate, {
+      kind: "local_command",
+      action: { kind: "local_command" },
+    });
+    assert.equal(body.mode, "action_authorization");
+    assert.equal(JSON.stringify(body).includes("workspace"), false);
+    assert.equal(JSON.stringify(body).includes("allowRemoteWrite"), false);
+    assert.equal(JSON.stringify(body).includes("allowNetwork"), false);
+    assert.equal(JSON.stringify(body).includes('"command"'), false);
+    assert.equal(JSON.stringify(body).includes('"cwd"'), false);
+    assert.doesNotMatch(body.evidence, /mandate\.kind:\s*local_command/);
+    assert.doesNotMatch(body.evidence, /action\.kind:\s*local_command/);
+    for (const key of Object.keys(body)) {
+      assert.ok(
+        SENTINEL_VERIFY_BODY_FIELDS.includes(key),
+        `unexpected Sentinel body field: ${key}`,
+      );
+    }
+
+    const actionOnly = buildSentinelVerifyBody({
+      ...shipNotify,
+      action_kind: "local_command",
+    });
+    assert.deepEqual(actionOnly.mandate, { action: { kind: "local_command" } });
   });
 });
 
@@ -517,6 +687,154 @@ describe("ship/npm/deploy mandate + notify-only action (agreement_allow regressi
     assert.notEqual(env.verdict, "ALLOW");
     assert.equal(env.structured_objections[0].code, "HOST_KIND_INVALID");
     assert.match(env.objections.join(" "), /mandate_kind/);
+  });
+});
+
+describe("local_command auto-route against a mocked Sentinel", () => {
+  const command = {
+    mandate: "Arms C/D: run with identical budget E",
+    proposed_action: "run_command: git status --short",
+    reasoning: "Inspect the working tree before editing.",
+  };
+
+  it("calls Sentinel without inventing a kind when the action is command form", async () => {
+    let captured;
+    let urlSeen = "";
+    const env = await verifyDecision(command, {
+      dqlApiKey: FIX_DQLK,
+      sentinelApiKey: FIX_SENTINEL_UNUSED,
+      fetchImpl: async (url, init) => {
+        urlSeen = String(url);
+        captured = JSON.parse(String(init.body));
+        return new Response(JSON.stringify(SENTINEL_FIXTURE), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+    assert.match(urlSeen, /\/sentinel\/verify$/);
+    assert.equal(Object.hasOwn(captured, "mandate"), false);
+    assert.equal(captured.mode, "action_authorization");
+    assert.equal(env.surface, "sentinel");
+    assert.equal(env.execute, false);
+    assert.equal(env.verdict, "UNCERTAIN");
+  });
+
+  it("forwards a declared local_command and fail-closes a Sentinel that rejects the kind", async () => {
+    let calls = 0;
+    const env = await verifyDecision(
+      {
+        ...command,
+        mandate_kind: "local_command",
+        action_kind: "local_command",
+      },
+      {
+        dqlApiKey: FIX_DQLK,
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async (_url, init) => {
+          calls += 1;
+          const body = JSON.parse(String(init.body));
+          assert.deepEqual(body.mandate, {
+            kind: "local_command",
+            action: { kind: "local_command" },
+          });
+          assert.equal(body.mandate.granted, undefined);
+          assert.equal(body.mandate.action.command, undefined);
+          assert.equal(body.mandate.action.cwd, undefined);
+          return new Response(
+            JSON.stringify({
+              errors: [
+                {
+                  field: "mandate.kind",
+                  message:
+                    "Must be one of: informational, value_transfer, permission, deploy_ship, unknown",
+                },
+              ],
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } },
+          );
+        },
+      },
+    );
+    assert.equal(calls, 1);
+    assert.equal(env.surface, "sentinel");
+    assert.equal(env.execute, false);
+    assert.equal(env.verdict, "ERROR");
+    assert.match(env.objections.join(" "), /Sentinel HTTP 400/);
+    assert.equal(env.objections.join(" ").includes("local_command"), false);
+  });
+
+  it("does not fall back to DQL when a command-form action has no Sentinel key", async () => {
+    let called = 0;
+    const env = await verifyDecision(
+      {
+        mandate: "Inspect the repo",
+        proposed_action: "$ git status",
+        reasoning: "Read-only status",
+      },
+      {
+        dqlApiKey: FIX_DQLK,
+        fetchImpl: async () => {
+          called += 1;
+          throw new Error("should not fetch");
+        },
+      },
+    );
+    assert.equal(called, 0);
+    assert.equal(env.surface, "sentinel");
+    assert.equal(env.execute, false);
+    assert.match(env.objections.join(" "), /Sentinel key not configured/);
+  });
+
+  it("keeps explicit mode=dql on a command-form action", async () => {
+    let calls = 0;
+    const env = await verifyDecision(
+      {
+        mandate: "Inspect the repo",
+        proposed_action: "run_command: git status",
+        reasoning: "Read-only",
+        mode: "dql",
+      },
+      {
+        dqlApiKey: FIX_DQLK,
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async () => {
+          calls += 1;
+          return new Response(JSON.stringify(DQL_FIXTURE), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        },
+      },
+    );
+    assert.equal(calls, 1);
+    assert.equal(env.surface, "dql");
+    assert.equal(env.verdict, "BLOCK");
+    assert.equal(env.execute, false);
+  });
+
+  it("does not route an invalid local-command alias, and does not call out", async () => {
+    let called = 0;
+    const env = await verifyDecision(
+      {
+        mandate: "Summarize the meeting notes",
+        proposed_action: "Write a short recap",
+        reasoning: "Highlight the action items",
+        action_kind: "Local_Command",
+      },
+      {
+        dqlApiKey: FIX_DQLK,
+        sentinelApiKey: FIX_SENTINEL_UNUSED,
+        fetchImpl: async () => {
+          called += 1;
+          throw new Error("should not fetch");
+        },
+      },
+    );
+    assert.equal(called, 0);
+    assert.equal(env.surface, "dql");
+    assert.equal(env.execute, false);
+    assert.equal(env.structured_objections[0].code, "HOST_KIND_INVALID");
   });
 });
 
