@@ -1,7 +1,21 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+const GUARD = fileURLToPath(new URL("./offline-fetch-guard.js", import.meta.url));
+
+function serverEnv(extra = {}) {
+  const env = { ...process.env };
+  const flag = `--import ${GUARD}`;
+  env.NODE_OPTIONS = env.NODE_OPTIONS ? `${env.NODE_OPTIONS} ${flag}` : flag;
+  for (const [key, value] of Object.entries(extra)) {
+    if (value === undefined) delete env[key];
+    else env[key] = value;
+  }
+  return env;
+}
 
 describe("thoughtproof-mcp server", () => {
   let client;
@@ -10,6 +24,7 @@ describe("thoughtproof-mcp server", () => {
     const transport = new StdioClientTransport({
       command: "node",
       args: ["dist/index.js"],
+      env: serverEnv(),
     });
     client = new Client({ name: "test-client", version: "1.0.0" });
     await client.connect(transport);
@@ -45,9 +60,17 @@ describe("thoughtproof-mcp server", () => {
       "value_transfer",
       "permission",
       "deploy_ship",
+      "local_command",
       "unknown",
     ]);
     assert.deepEqual(props.action_kind.enum, props.mandate_kind.enum);
+    assert.match(decision.description ?? "", /local_command/);
+    assert.match(props.mandate_kind.description ?? "", /local_command/);
+    assert.match(props.action_kind.description ?? "", /local_command/);
+    assert.match(props.mode.description ?? "", /command-form/);
+    const alias = tools.find((t) => t.name === "verify_before_action");
+    assert.deepEqual(alias.inputSchema.properties.action_kind.enum, props.action_kind.enum);
+    assert.equal(alias.description, decision.description);
     assert.ok(props.mode, "missing mode property");
     assert.ok(
       /must NOT put the overshoot/i.test(decision.description ?? ""),
@@ -92,16 +115,46 @@ describe("thoughtproof-mcp server", () => {
     assert.match(envelope.objections.join(" "), /DQL key not configured/);
   });
 
-  it("verify_claim handles API errors gracefully", { timeout: 20_000 }, async () => {
-    // Call with a claim — will likely get 402 or error since no real key
-    // The important thing is it doesn't crash. Bounded so CI does not hang
-    // on a live RV fetch.
-    const result = await client.callTool({
-      name: "verify_claim",
-      arguments: { claim: "Test claim for CI" },
+});
+
+describe("tool handler test mode", () => {
+  let client;
+
+  before(async () => {
+    const transport = new StdioClientTransport({
+      command: "node",
+      args: ["dist/index.js"],
+      env: serverEnv({
+        SENTINEL_TEST_MODE: "1",
+        SENTINEL_URL: undefined,
+        SENTINEL_API_KEY: "sentinel_test_mode_only",
+        THOUGHTPROOF_API_KEY: undefined,
+      }),
     });
-    assert.ok(result.content, "should return content");
-    assert.ok(result.content.length > 0, "should have at least one content block");
-    assert.equal(result.content[0].type, "text", "should return text content");
+    client = new Client({ name: "test-mode-client", version: "1.0.0" });
+    await client.connect(transport);
+  });
+
+  after(async () => {
+    await client?.close();
+  });
+
+  it("aborts before fetch when SENTINEL_TEST_MODE has no SENTINEL_URL", async () => {
+    const result = await client.callTool({
+      name: "verify_before_action",
+      arguments: {
+        mandate: "Inspect the repo.",
+        proposed_action: "run_command: git status",
+        reasoning: "Read-only status.",
+        mode: "sentinel",
+      },
+    });
+    const envelope = JSON.parse(result.content[0].text);
+    assert.equal(envelope.execute, false);
+    assert.equal(envelope.surface, "sentinel");
+    assert.equal(envelope.structured_objections[0].code, "SENTINEL_URL_REQUIRED");
+    assert.match(envelope.objections.join(" "), /SENTINEL_TEST_MODE requires SENTINEL_URL/);
+    assert.equal(envelope.objections.join(" ").includes("offline guard"), false);
+    assert.equal(envelope.objections.join(" ").includes("sentinel_test_mode_only"), false);
   });
 });

@@ -12,6 +12,8 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { mapSentinelEnvelope, verifyDecision } from "../dist/verify-decision.js";
 import { verifyTrade } from "../dist/verify-client.js";
+import { computeRequestHash } from "../dist/request-binding.js";
+import { buildSentinelVerifyBody } from "../dist/sentinel-decision-client.js";
 import {
   assessSentinelBinding,
   buildExportSignedInput,
@@ -45,6 +47,19 @@ function keyDoc(publicKey, overrides = {}) {
   };
 }
 
+/**
+ * SYNTHETIC request. The hash is produced in this test process and signed
+ * with an ephemeral key. It proves only that this MCP checks requestHash.
+ * It is not a Sentinel-issued export.
+ */
+const SYNTHETIC_INPUT = {
+  mandate: "Synthetic binding fixture. Proves only the MCP check.",
+  proposed_action: "run_command: git status",
+  reasoning: "Inspect the tree.",
+};
+/** API body, not tool arguments. Ephemeral signatures over this object prove only the MCP check. */
+const SYNTHETIC_REQUEST = buildSentinelVerifyBody(SYNTHETIC_INPUT, "checkpoint");
+
 function issue(privateKey, verdict, options = {}) {
   const schema = options.schema ?? "sentinel.verdict.canonical.v1";
   const verificationId = options.verificationId ?? RECEIPT;
@@ -53,6 +68,8 @@ function issue(privateKey, verdict, options = {}) {
     artifactSchema: schema,
     verificationId,
     verdict,
+    ...(options.requestHash ? { requestHash: options.requestHash } : {}),
+    ...(options.extraCanonical ?? {}),
   });
   const digest = digestTransportedCanonical(canonical);
   const fields = {
@@ -73,6 +90,14 @@ function issue(privateKey, verdict, options = {}) {
     ...fields,
     signature,
   };
+}
+
+/** Ephemeral signature over a canonical that includes this test's requestHash. */
+function issueBound(privateKey, verdict, request, options = {}) {
+  return issue(privateKey, verdict, {
+    ...options,
+    requestHash: computeRequestHash(request),
+  });
 }
 
 function response(verdict = "BLOCK") {
@@ -146,12 +171,13 @@ describe("signed export binding", () => {
     assert.equal(JSON.stringify(env).includes(FIX_SENTINEL), false);
   });
 
-  it("executes only when the signed verdict is ALLOW and matches", () => {
-    const artifact = issue(privateKey, "ALLOW");
+  it("executes only when the signed ALLOW matches and carries a synthetic requestHash", () => {
+    const artifact = issueBound(privateKey, "ALLOW", SYNTHETIC_REQUEST);
     const envelope = mapSentinelEnvelope(
       { ...response("ALLOW"), signed_export: artifact },
       undefined,
       bind(keys),
+      SYNTHETIC_REQUEST,
     );
     assert.equal(envelope.execute, true);
     assert.equal(envelope.verdict, "ALLOW");
@@ -257,16 +283,18 @@ describe("signed export binding", () => {
 
   it("accepts a retired key inside its signedAt window and rejects a not-yet-valid key", () => {
     const retired = mapSentinelEnvelope(
-      { ...response("ALLOW"), signed_export: issue(privateKey, "ALLOW") },
+      { ...response("ALLOW"), signed_export: issueBound(privateKey, "ALLOW", SYNTHETIC_REQUEST) },
       undefined,
       bind(keyDoc(publicKey, { status: "retired" })),
+      SYNTHETIC_REQUEST,
     );
     assert.equal(retired.execute, true);
 
     const early = mapSentinelEnvelope(
-      { ...response("ALLOW"), signed_export: issue(privateKey, "ALLOW") },
+      { ...response("ALLOW"), signed_export: issueBound(privateKey, "ALLOW", SYNTHETIC_REQUEST) },
       undefined,
       bind(keyDoc(publicKey, { notBefore: "2027-01-01T00:00:00Z" })),
+      SYNTHETIC_REQUEST,
     );
     assert.equal(early.execute, false);
     assert.match(early.objections.join(" "), /key_not_yet_valid/);
@@ -337,11 +365,12 @@ describe("signed export binding", () => {
   });
 
   it("clock skew keeps a signed ALLOW fresh on the inside edge and expired one second later", () => {
-    const artifact = issue(privateKey, "ALLOW", { validUntil: NOW });
+    const artifact = issueBound(privateKey, "ALLOW", SYNTHETIC_REQUEST, { validUntil: NOW });
     const inside = mapSentinelEnvelope(
       { ...response("ALLOW"), signed_export: artifact },
       undefined,
       { keysDoc: keys, nowSeconds: NOW + EXPORT_CLOCK_SKEW_SECONDS, env: {} },
+      SYNTHETIC_REQUEST,
     );
     assert.equal(inside.execute, true);
     assert.equal(inside.signed_export_verification.code, "ok");
@@ -350,6 +379,7 @@ describe("signed export binding", () => {
       { ...response("ALLOW"), signed_export: artifact },
       undefined,
       { keysDoc: keys, nowSeconds: NOW + EXPORT_CLOCK_SKEW_SECONDS + 1, env: {} },
+      SYNTHETIC_REQUEST,
     );
     assert.equal(outside.execute, false);
     assert.notEqual(outside.verdict, "ALLOW");
@@ -358,14 +388,18 @@ describe("signed export binding", () => {
     assert.deepEqual(outside.signed_export, artifact);
   });
 
-  // Skipped on purpose. Unskip to observe the current gap. This is not a
-  // permanent acceptance test: the next change must bind the export to the
-  // mandate and the proposed action.
-  it.skip("known gap: one signed ALLOW returns execute true for deploy staging and delete production database", async () => {
+  it("one signed ALLOW without requestHash does not execute for a different command", async () => {
     const artifact = issue(privateKey, "ALLOW");
     const body = JSON.stringify({ ...response("ALLOW"), signed_export: artifact });
+    const commands = [
+      "run_command: git status",
+      "run_command: git push --force",
+      "run_command: git status &",
+      "deploy staging",
+      "delete production database",
+    ];
     const results = [];
-    for (const proposed_action of ["deploy staging", "delete production database"]) {
+    for (const proposed_action of commands) {
       results.push(await verifyDecision(
         {
           mandate: "Operate the production service",
@@ -381,13 +415,16 @@ describe("signed export binding", () => {
         },
       ));
     }
-    assert.equal(results[0].execute, true);
-    assert.equal(results[1].execute, true);
-    assert.equal(results[0].verdict, "ALLOW");
-    assert.equal(results[1].verdict, "ALLOW");
+    assert.equal(results.length, commands.length);
+    for (const env of results) {
+      assert.equal(env.execute, false);
+      assert.notEqual(env.verdict, "ALLOW");
+      assert.equal(env.signed_export_verification.code, "request_hash_missing");
+    }
     assert.deepEqual(results[0].signed_export, results[1].signed_export);
-    assert.notEqual(results[0].signed_export.canonical.includes("deploy staging"), true);
-    assert.notEqual(results[0].signed_export.canonical.includes("delete production database"), true);
+    assert.equal(results[0].signed_export.canonical.includes("requestHash"), false);
+    assert.equal(results[0].signed_export.canonical.includes("git status"), false);
+    assert.equal(results[0].signed_export.canonical.includes("git push --force"), false);
   });
 
   it("maps Sentinel 401, 429, and 5xx to execute false", async () => {
@@ -471,12 +508,206 @@ describe("signed export binding", () => {
   });
 });
 
+describe("requestHash binding (synthetic; proves only the MCP check)", () => {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const keys = keyDoc(publicKey);
+  const mandate = "Work locally in this repo.";
+  const reasoning = "Inspect the tree before editing.";
+  const actionA = "run_command: git status";
+  const requestA = { mandate, proposed_action: actionA, reasoning };
+
+  async function decide(request, artifact, fetchImpl) {
+    return verifyDecision(
+      { ...request, mode: "sentinel" },
+      {
+        sentinelApiKey: FIX_SENTINEL,
+        signedBinding: bind(keys),
+        fetchImpl: fetchImpl ?? (async () =>
+          new Response(
+            JSON.stringify({ ...response("ALLOW"), signed_export: artifact }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          )),
+      },
+    );
+  }
+
+  it("reuses one ALLOW export for git status, force-push, and a background status and executes none", async () => {
+    const artifact = issue(privateKey, "ALLOW");
+    for (const proposed_action of [
+      "run_command: git status",
+      "run_command: git push --force",
+      "run_command: git status &",
+    ]) {
+      const env = await decide(
+        { mandate: "Operate the production service", proposed_action, reasoning: "operator request" },
+        artifact,
+      );
+      assert.equal(env.execute, false, proposed_action);
+      assert.notEqual(env.verdict, "ALLOW");
+      assert.equal(env.signed_export_verification.code, "request_hash_missing");
+    }
+  });
+
+  it("rejects the same action when the mandate changes", async () => {
+    const artifact = issueBound(privateKey, "ALLOW", buildSentinelVerifyBody(requestA, "checkpoint"));
+    const env = await decide(
+      { mandate: "Work locally in a different repo.", proposed_action: actionA, reasoning },
+      artifact,
+    );
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.equal(env.signed_export_verification.code, "request_hash_mismatch");
+  });
+
+  it("executes matching request A and refuses request B when the synthetic requestHash matches A", async () => {
+    const bodyA = buildSentinelVerifyBody(requestA, "checkpoint");
+    const artifact = issueBound(privateKey, "ALLOW", bodyA);
+    const allow = await decide(requestA, artifact);
+    assert.equal(allow.execute, true);
+    assert.equal(allow.verdict, "ALLOW");
+    assert.equal(allow.signed_export_verification.code, "ok");
+    assert.match(JSON.stringify(allow.signed_export.canonical), /requestHash/);
+
+    const otherInput = { mandate, proposed_action: "run_command: git status &", reasoning };
+    const other = await decide(otherInput, artifact);
+    assert.equal(other.execute, false);
+    assert.notEqual(other.verdict, "ALLOW");
+    assert.equal(other.signed_export_verification.code, "request_hash_mismatch");
+    assert.notEqual(
+      computeRequestHash(bodyA),
+      computeRequestHash(buildSentinelVerifyBody(otherInput, "checkpoint")),
+    );
+  });
+
+  it("does not treat mandateDigest, actionDigest, or packageDigest as the request hash", async () => {
+    const digest = `sha256:${"ab".repeat(32)}`;
+    const artifact = issue(privateKey, "ALLOW", {
+      extraCanonical: {
+        mandateDigest: digest,
+        actionDigest: digest,
+        packageDigest: digest,
+      },
+    });
+    assert.equal(artifact.canonical.includes("requestHash"), false);
+    const env = await decide(requestA, artifact);
+    assert.equal(env.execute, false);
+    assert.equal(env.signed_export_verification.code, "request_hash_missing");
+  });
+
+  it("closes when any bound body field changes, and ignores JSON formatting", () => {
+    const body = buildSentinelVerifyBody(requestA, "checkpoint");
+    const artifact = issueBound(privateKey, "ALLOW", body);
+    const changes = {
+      claim: `${body.claim} `,
+      evidence: `${body.evidence} `,
+      mode: "trade_execution",
+      tier: "standard",
+      mandate: { kind: "local_command" },
+      "x-extra": "kept",
+    };
+    for (const [field, value] of Object.entries(changes)) {
+      const mutated = { ...body, [field]: value };
+      const env = mapSentinelEnvelope(
+        { ...response("ALLOW"), signed_export: artifact },
+        undefined,
+        bind(keys),
+        mutated,
+      );
+      assert.equal(env.execute, false, field);
+      assert.notEqual(env.verdict, "ALLOW", field);
+      assert.equal(env.signed_export_verification.code, "request_hash_mismatch", field);
+    }
+
+    const pretty = JSON.stringify(body, null, 2);
+    const reordered = `{"tier":"checkpoint","mode":"action_authorization","evidence":${JSON.stringify(body.evidence)},"claim":${JSON.stringify(body.claim)}}`;
+    assert.equal(computeRequestHash(JSON.parse(pretty)), computeRequestHash(body));
+    assert.equal(computeRequestHash(JSON.parse(reordered)), computeRequestHash(body));
+    const spaced = { ...body, claim: body.claim.replace("git status", "git  status") };
+    assert.notEqual(computeRequestHash(spaced), computeRequestHash(body));
+    const absent = { ...body };
+    delete absent.mandate;
+    assert.notEqual(computeRequestHash({ ...absent, mandate: null }), computeRequestHash(absent));
+  });
+
+  it("signed UNCERTAIN without a matching requestHash stays UNCERTAIN", async () => {
+    const missing = issue(privateKey, "UNCERTAIN");
+    const missingEnv = await decide(requestA, missing, async () =>
+      new Response(JSON.stringify({ ...response("UNCERTAIN"), signed_export: missing }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    assert.equal(missingEnv.execute, false);
+    assert.equal(missingEnv.verdict, "UNCERTAIN");
+    assert.equal(missingEnv.signed_export_verification.code, "request_hash_missing");
+
+    const wrong = issueBound(
+      privateKey,
+      "UNCERTAIN",
+      buildSentinelVerifyBody({ ...requestA, proposed_action: "run_command: git status &" }, "checkpoint"),
+    );
+    const wrongEnv = await decide(requestA, wrong, async () =>
+      new Response(JSON.stringify({ ...response("UNCERTAIN"), signed_export: wrong }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    assert.equal(wrongEnv.execute, false);
+    assert.equal(wrongEnv.verdict, "UNCERTAIN");
+    assert.equal(wrongEnv.signed_export_verification.code, "request_hash_mismatch");
+
+    const matched = issueBound(privateKey, "UNCERTAIN", buildSentinelVerifyBody(requestA, "checkpoint"));
+    const matchedEnv = await decide(requestA, matched, async () =>
+      new Response(JSON.stringify({ ...response("UNCERTAIN"), signed_export: matched }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    assert.equal(matchedEnv.execute, false);
+    assert.equal(matchedEnv.verdict, "UNCERTAIN");
+    assert.equal(matchedEnv.signed_export_verification.code, "signed_not_allow");
+  });
+
+  it("does not send a body that contains a lone surrogate", async () => {
+    let fetches = 0;
+    const env = await verifyDecision(
+      {
+        mandate: "Work locally in this repo.",
+        proposed_action: "run_command: git status",
+        reasoning: "Inspect \uD800 the tree.",
+        mode: "sentinel",
+      },
+      {
+        sentinelApiKey: FIX_SENTINEL,
+        fetchImpl: async () => {
+          fetches += 1;
+          throw new Error("fetch must not run");
+        },
+      },
+    );
+    assert.equal(fetches, 0);
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.match(env.objections.join(" "), /request binding rejected/);
+  });
+
+  it("rejects a tampered signature even when requestHash matches", async () => {
+    const artifact = issueBound(privateKey, "ALLOW", buildSentinelVerifyBody(requestA, "checkpoint"));
+    const flipped = `0x${artifact.signature.slice(2, 3) === "a" ? "b" : "a"}${artifact.signature.slice(3)}`;
+    const env = await decide(requestA, { ...artifact, signature: flipped });
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.match(env.objections.join(" "), /signature_invalid/);
+  });
+});
+
 describe("sentinel vector fixtures (real v1 + v2 signing format)", () => {
   // thoughtproof-sentinel main 54cba8b6fe4e682d6cd6810fe83d2644bfa9dd6d
   // scripts/fixtures/m1-export/export-valid.json
   // scripts/fixtures/m1-export-v2/export-v2-valid.json
   // Signed with kid tp-sentinel-export-ed25519-2026-09-vector (fixture seed,
-  // not the production private key). Generators set ttl = 86400, which is the
+  // not the production private key). These are format test vectors only.
+  // Generators set ttl = 86400, which is the
   // same condition as SENTINEL_EXPORT_TTL_SECONDS > 0: validUntil is present.
   const here = dirname(fileURLToPath(import.meta.url));
   const v1 = JSON.parse(
@@ -497,7 +728,7 @@ describe("sentinel vector fixtures (real v1 + v2 signing format)", () => {
     signed_export_v2: v2,
   };
 
-  it("genuine v1+v2 ALLOW with validUntil executes", () => {
+  it("genuine v1+v2 ALLOW with validUntil does not execute without requestHash", () => {
     assert.equal(v1.artifactSchema, "sentinel.verdict.canonical.v1");
     assert.equal(v2.artifactSchema, "sentinel.verdict.canonical.v2");
     assert.equal(v1.keyId, "tp-sentinel-export-ed25519-2026-09-vector");
@@ -513,11 +744,15 @@ describe("sentinel vector fixtures (real v1 + v2 signing format)", () => {
       nowSeconds: v1.signedAt,
       allowVectorOnly: true,
       env: {},
+    }, {
+      mandate: "Synthetic check against a real vector that has no requestHash.",
+      proposed_action: "run_command: git status",
+      reasoning: "The vector must not execute.",
     });
-    assert.equal(envelope.execute, true);
-    assert.equal(envelope.verdict, "ALLOW");
-    assert.equal(envelope.signed_export_verification.ok, true);
-    assert.equal(envelope.signed_export_verification.code, "ok");
+    assert.equal(envelope.execute, false);
+    assert.notEqual(envelope.verdict, "ALLOW");
+    assert.equal(envelope.signed_export_verification.ok, false);
+    assert.equal(envelope.signed_export_verification.code, "request_hash_missing");
     assert.equal(envelope.signed_export_verification.signed_verdict, "ALLOW");
     assert.deepEqual(envelope.signed_export, v1);
     assert.deepEqual(envelope.signed_export_v2, v2);

@@ -1,0 +1,261 @@
+{
+  "profile": "thoughtproof.mcp.request_binding.v2",
+  "note": "Synthetic offline vectors for thoughtproof.mcp.request_binding.v2. Not production evidence. Positive Ed25519 fixtures in the test suite use an ephemeral key. The committed v1/v2 export files use kid tp-sentinel-export-ed25519-2026-09-vector and are format vectors only.",
+  "vectors": [
+    {
+      "id": "decision-builder",
+      "body": {
+        "claim": "run_command: git status is authorized by the principal's mandate",
+        "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+        "mode": "action_authorization",
+        "tier": "checkpoint"
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "run_command: git status is authorized by the principal's mandate",
+          "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+          "mode": "action_authorization",
+          "tier": "checkpoint"
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"run_command: git status is authorized by the principal's mandate\",\"evidence\":\"Principal mandate (verbatim quote):\\nWork locally in this repo.\\n\\nProposed action:\\nrun_command: git status\\n\\nAgent reasoning:\\nInspect the tree before editing.\",\"mode\":\"action_authorization\",\"tier\":\"checkpoint\"}}",
+      "requestHash": "sha256:ad43063b429979653557db5f4456086e9306a63a8bba9c03ed5f75c8b1222cab",
+      "builder": "sentinel-decision",
+      "input": {
+        "mandate": "Work locally in this repo.",
+        "proposed_action": "run_command: git status",
+        "reasoning": "Inspect the tree before editing.",
+        "tier": "checkpoint"
+      },
+      "serializedVariants": [
+        "{\"tier\":\"checkpoint\",\"mode\":\"action_authorization\",\"evidence\":\"Principal mandate (verbatim quote):\\nWork locally in this repo.\\n\\nProposed action:\\nrun_command: git status\\n\\nAgent reasoning:\\nInspect the tree before editing.\",\"claim\":\"run_command: git status is authorized by the principal's mandate\"}",
+        "{\n  \"claim\": \"run_command: git status is authorized by the principal's mandate\",\n  \"evidence\": \"Principal mandate (verbatim quote):\\nWork locally in this repo.\\n\\nProposed action:\\nrun_command: git status\\n\\nAgent reasoning:\\nInspect the tree before editing.\",\n  \"mode\": \"action_authorization\",\n  \"tier\": \"checkpoint\"\n}"
+      ],
+      "serializedNote": "These strings differ in key order and whitespace. JSON.parse of each is the same body and the same requestHash."
+    },
+    {
+      "id": "raul-context-collapse",
+      "body": {
+        "claim": "run_command: git status is authorized by the principal's mandate",
+        "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nPlan.\n\nContext:\nextra notes",
+        "mode": "action_authorization",
+        "tier": "checkpoint"
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "run_command: git status is authorized by the principal's mandate",
+          "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nPlan.\n\nContext:\nextra notes",
+          "mode": "action_authorization",
+          "tier": "checkpoint"
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"run_command: git status is authorized by the principal's mandate\",\"evidence\":\"Principal mandate (verbatim quote):\\nWork locally in this repo.\\n\\nProposed action:\\nrun_command: git status\\n\\nAgent reasoning:\\nPlan.\\n\\nContext:\\nextra notes\",\"mode\":\"action_authorization\",\"tier\":\"checkpoint\"}}",
+      "requestHash": "sha256:6c8329b68301ca8407d082870652097f52952271fa5c406bc9a29ed1d6e49cce",
+      "builder": "sentinel-decision",
+      "note": "A Context: section inside reasoning and the same text in the context field produce one HTTP body and one hash.",
+      "inputs": [
+        {
+          "mandate": "Work locally in this repo.",
+          "proposed_action": "run_command: git status",
+          "reasoning": "Plan.\n\nContext:\nextra notes",
+          "tier": "checkpoint"
+        },
+        {
+          "mandate": "Work locally in this repo.",
+          "proposed_action": "run_command: git status",
+          "reasoning": "Plan.",
+          "context": "extra notes",
+          "tier": "checkpoint"
+        }
+      ]
+    },
+    {
+      "id": "decision-with-mandate-kind",
+      "body": {
+        "claim": "run_command: git status is authorized by the principal's mandate",
+        "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+        "mode": "action_authorization",
+        "tier": "checkpoint",
+        "mandate": {
+          "kind": "local_command",
+          "action": {
+            "kind": "local_command"
+          }
+        }
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "run_command: git status is authorized by the principal's mandate",
+          "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+          "mode": "action_authorization",
+          "tier": "checkpoint",
+          "mandate": {
+            "kind": "local_command",
+            "action": {
+              "kind": "local_command"
+            }
+          }
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"run_command: git status is authorized by the principal's mandate\",\"evidence\":\"Principal mandate (verbatim quote):\\nWork locally in this repo.\\n\\nProposed action:\\nrun_command: git status\\n\\nAgent reasoning:\\nInspect the tree before editing.\",\"mandate\":{\"action\":{\"kind\":\"local_command\"},\"kind\":\"local_command\"},\"mode\":\"action_authorization\",\"tier\":\"checkpoint\"}}",
+      "requestHash": "sha256:ffe011dc12d711fb68ddff3f184e8559a19f70437e55602cdfb5cb4f81342a2d",
+      "builder": "sentinel-decision",
+      "input": {
+        "mandate": "Work locally in this repo.",
+        "proposed_action": "run_command: git status",
+        "reasoning": "Inspect the tree before editing.",
+        "mandate_kind": "local_command",
+        "action_kind": "local_command",
+        "tier": "checkpoint"
+      }
+    },
+    {
+      "id": "trade-builder",
+      "body": {
+        "claim": "open 1x long",
+        "evidence": "Thesis: trend holds\n\nReasoning: higher highs",
+        "mode": "trade_execution",
+        "tier": "checkpoint"
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "open 1x long",
+          "evidence": "Thesis: trend holds\n\nReasoning: higher highs",
+          "mode": "trade_execution",
+          "tier": "checkpoint"
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"open 1x long\",\"evidence\":\"Thesis: trend holds\\n\\nReasoning: higher highs\",\"mode\":\"trade_execution\",\"tier\":\"checkpoint\"}}",
+      "requestHash": "sha256:50512eadd4ab17a45103d5b2b3e90bb6e84c31851e76f4f451611029c598ea90",
+      "builder": "verify-trade",
+      "input": {
+        "action": "open 1x long",
+        "thesis": "trend holds",
+        "reasoning": "higher highs",
+        "tier": "checkpoint"
+      }
+    },
+    {
+      "id": "inside-string-whitespace",
+      "body": {
+        "claim": "run_command: git  status is authorized by the principal's mandate",
+        "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+        "mode": "action_authorization",
+        "tier": "checkpoint"
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "run_command: git  status is authorized by the principal's mandate",
+          "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+          "mode": "action_authorization",
+          "tier": "checkpoint"
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"run_command: git  status is authorized by the principal's mandate\",\"evidence\":\"Principal mandate (verbatim quote):\\nWork locally in this repo.\\n\\nProposed action:\\nrun_command: git status\\n\\nAgent reasoning:\\nInspect the tree before editing.\",\"mode\":\"action_authorization\",\"tier\":\"checkpoint\"}}",
+      "requestHash": "sha256:da446eeb6c1130e33259a19171045f2bf03ae537e8c0fd7cf06b1600f4e4c448",
+      "note": "Two spaces inside the claim. JCS does not trim or collapse them.",
+      "differsFrom": "decision-builder"
+    },
+    {
+      "id": "unknown-extra-field",
+      "body": {
+        "claim": "run_command: git status is authorized by the principal's mandate",
+        "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+        "mode": "action_authorization",
+        "tier": "checkpoint",
+        "x-extra": "kept"
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "run_command: git status is authorized by the principal's mandate",
+          "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+          "mode": "action_authorization",
+          "tier": "checkpoint",
+          "x-extra": "kept"
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"run_command: git status is authorized by the principal's mandate\",\"evidence\":\"Principal mandate (verbatim quote):\\nWork locally in this repo.\\n\\nProposed action:\\nrun_command: git status\\n\\nAgent reasoning:\\nInspect the tree before editing.\",\"mode\":\"action_authorization\",\"tier\":\"checkpoint\",\"x-extra\":\"kept\"}}",
+      "requestHash": "sha256:01377930441bbceaea5f235d41f2179cbe89603c043bcc0ff0b4cb44d51d57bc",
+      "note": "x-extra is part of the body and therefore part of the hash.",
+      "differsFrom": "decision-builder"
+    },
+    {
+      "id": "null-mandate",
+      "body": {
+        "claim": "run_command: git status is authorized by the principal's mandate",
+        "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+        "mode": "action_authorization",
+        "tier": "checkpoint",
+        "mandate": null
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "run_command: git status is authorized by the principal's mandate",
+          "evidence": "Principal mandate (verbatim quote):\nWork locally in this repo.\n\nProposed action:\nrun_command: git status\n\nAgent reasoning:\nInspect the tree before editing.",
+          "mode": "action_authorization",
+          "tier": "checkpoint",
+          "mandate": null
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"run_command: git status is authorized by the principal's mandate\",\"evidence\":\"Principal mandate (verbatim quote):\\nWork locally in this repo.\\n\\nProposed action:\\nrun_command: git status\\n\\nAgent reasoning:\\nInspect the tree before editing.\",\"mandate\":null,\"mode\":\"action_authorization\",\"tier\":\"checkpoint\"}}",
+      "requestHash": "sha256:4bf990f1995840880689b4eb0a19100e9f713f4c003e51eb58aa1596b3fad76b",
+      "note": "mandate: null is present. It is not the same as an absent mandate key.",
+      "differsFrom": "decision-builder"
+    },
+    {
+      "id": "valid-surrogate-pair",
+      "note": "U+1F600 is a high/low surrogate pair and must hash. Not a lone surrogate.",
+      "body": {
+        "claim": "run_command: git status 😀",
+        "evidence": "emoji pair",
+        "mode": "action_authorization",
+        "tier": "checkpoint"
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "run_command: git status 😀",
+          "evidence": "emoji pair",
+          "mode": "action_authorization",
+          "tier": "checkpoint"
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"run_command: git status 😀\",\"evidence\":\"emoji pair\",\"mode\":\"action_authorization\",\"tier\":\"checkpoint\"}}",
+      "requestHash": "sha256:c1d4099f4e6a24a911c2e882ad0793ba1ad31b6e198b00af349a59d2c913585f"
+    },
+    {
+      "id": "lone-high-surrogate-value",
+      "reject": true,
+      "where": "value",
+      "note": "Lone high surrogate U+D800 in a string value. RFC 8785 requires an error.",
+      "body": {
+        "claim": "\ud800"
+      }
+    },
+    {
+      "id": "lone-low-surrogate-value",
+      "reject": true,
+      "where": "value",
+      "note": "Lone low surrogate U+DC00 in a string value. RFC 8785 requires an error.",
+      "body": {
+        "claim": "\udc00"
+      }
+    },
+    {
+      "id": "lone-surrogate-key",
+      "reject": true,
+      "where": "key",
+      "note": "Lone high surrogate U+D800 as an object key. RFC 8785 requires an error.",
+      "body": {
+        "\ud800": "kept"
+      }
+    }
+  ]
+}

@@ -19,6 +19,16 @@
 // Sentinel call (Base eip155:8453 or GOAT eip155:2345) and the settlement
 // receipt is surfaced back to the caller.
 
+import { computeRequestHash, RequestBindingRejected } from "./request-binding.js";
+import { SENTINEL_VERIFY_URL } from "./sentinel-decision-client.js";
+import {
+  headersForSentinelCall,
+  isRedirectResponse,
+  resolveSentinelTarget,
+  SENTINEL_TEST_URL_REQUIRED,
+  type DeploymentProtection,
+  type SentinelTarget,
+} from "./sentinel-target.js";
 import { gateOuterVerdict, type SentinelBindingOptions } from "./signed-export.js";
 
 export type Verdict = "ALLOW" | "BLOCK" | "UNCERTAIN";
@@ -104,11 +114,53 @@ export interface VerifyClientConfig {
   fetchImpl?: typeof fetch;
   /** Sentinel signed-export check. Default fail-closed. */
   signedBinding?: SentinelBindingOptions;
+  /** Explicit test transport. When set, process.env is not read for the URL. */
+  sentinelUrl?: string;
+  sentinelTestMode?: boolean;
+  sentinelTargetError?: string;
+  deploymentProtection?: DeploymentProtection;
+  /** Used only when the explicit target fields above are omitted. */
+  env?: NodeJS.ProcessEnv;
 }
 
-const SENTINEL_URL =
-  process.env.SENTINEL_URL ?? "https://sentinel.thoughtproof.ai/sentinel/verify";
 const RV_URL = process.env.RV_URL ?? "https://api.thoughtproof.ai/v1/check";
+
+export interface TradeVerifyBody {
+  claim: string;
+  evidence: string;
+  mode: "trade_execution";
+  tier: "checkpoint" | "standard";
+}
+
+/** The Sentinel body for verify_trade. Built once and hashed as-is. No trimming. */
+export function buildTradeVerifyBody(
+  input: VerifyTradeInput,
+  tier: "checkpoint" | "standard" = "checkpoint",
+): TradeVerifyBody {
+  return {
+    claim: input.action,
+    evidence: `Thesis: ${input.thesis}\n\nReasoning: ${input.reasoning}`,
+    mode: "trade_execution",
+    tier,
+  };
+}
+
+function tradeTarget(cfg: VerifyClientConfig): SentinelTarget {
+  if (
+    cfg.sentinelTestMode !== undefined ||
+    cfg.sentinelUrl !== undefined ||
+    cfg.deploymentProtection !== undefined ||
+    cfg.sentinelTargetError !== undefined
+  ) {
+    return {
+      testMode: cfg.sentinelTestMode === true,
+      ...(cfg.sentinelUrl ? { url: cfg.sentinelUrl } : {}),
+      ...(cfg.deploymentProtection ? { protection: cfg.deploymentProtection } : {}),
+      ...(cfg.sentinelTargetError ? { protectionError: cfg.sentinelTargetError } : {}),
+    };
+  }
+  return resolveSentinelTarget(cfg.env ?? process.env);
+}
 
 function normalizeVerdict(v: unknown): Verdict {
   const s = String(v ?? "").toUpperCase();
@@ -137,22 +189,34 @@ interface SentinelCallResult {
 async function callSentinel(
   input: VerifyTradeInput,
   cfg: VerifyClientConfig,
+  target: SentinelTarget,
 ): Promise<SentinelCallResult> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.apiKey) headers["X-Sentinel-Key"] = cfg.apiKey;
-  if (cfg.x402PaymentSignature) headers["PAYMENT-SIGNATURE"] = cfg.x402PaymentSignature;
   const fetchImpl = cfg.fetchImpl ?? fetch;
+  const url = target.url?.trim() || SENTINEL_VERIFY_URL;
+  const request = buildTradeVerifyBody(input, cfg.sentinelTier ?? "checkpoint");
+  try {
+    computeRequestHash(request);
+  } catch (err) {
+    if (err instanceof RequestBindingRejected) throw err;
+    throw new RequestBindingRejected();
+  }
+  const headers = headersForSentinelCall({
+    url,
+    apiKey: cfg.apiKey,
+    paymentSignature: cfg.x402PaymentSignature,
+    protection: target.protection,
+  });
 
-  const res = await fetchImpl(SENTINEL_URL, {
+  const res = await fetchImpl(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      claim: input.action,
-      evidence: `Thesis: ${input.thesis}\n\nReasoning: ${input.reasoning}`,
-      mode: "trade_execution",
-      tier: cfg.sentinelTier ?? "checkpoint",
-    }),
+    body: JSON.stringify(request),
+    redirect: "manual",
   });
+
+  if (isRedirectResponse(res)) {
+    throw new Error(`Sentinel redirect refused (HTTP ${res.status})`);
+  }
 
   if (res.status === 402) {
     const challenge = res.headers.get("payment-required") ?? "";
@@ -183,7 +247,7 @@ async function callSentinel(
 
   const d = (await res.json()) as Record<string, any>;
   const att = d.attestation as Record<string, any> | undefined;
-  const gated = gateOuterVerdict(d.verdict, d, cfg.signedBinding);
+  const gated = gateOuterVerdict(d.verdict, d, cfg.signedBinding, request);
   const gatedVerdict = normalizeVerdict(gated.verdict);
   const verdict = gated.execute ? gatedVerdict : gatedVerdict === "ALLOW" ? "UNCERTAIN" : gatedVerdict;
   const blocksEscalation =
@@ -284,17 +348,44 @@ function recommend(verdict: Verdict): string {
  * Verify a trade/action decision through ThoughtProof.
  * Sentinel gate first; escalate to RV for high-stakes decisions that survive it.
  */
+function closedTrade(message: string, start: number): VerifyTradeResult {
+  return {
+    verdict: "UNCERTAIN",
+    recommendation: recommend("UNCERTAIN"),
+    route: "sentinel",
+    objections: [{ severity: "high", explanation: message }],
+    attestation: {},
+    latencyMs: Date.now() - start,
+    payment: { method: "none" },
+  };
+}
+
 export async function verifyTrade(
   input: VerifyTradeInput,
   cfg: VerifyClientConfig,
 ): Promise<VerifyTradeResult> {
   const start = Date.now();
+  const target = tradeTarget(cfg);
+  if (target.protectionError) return closedTrade(target.protectionError, start);
+  if (target.testMode && !target.url?.trim()) return closedTrade(SENTINEL_TEST_URL_REQUIRED, start);
+
   // "micro" stake → fast Sentinel-only gate. Everything else escalates to the
   // full Sentinel→RV adversarial pipeline (RV applies the stake threshold).
   const stakeLevel = input.stakeLevel ?? "high";
   const escalateToRv = stakeLevel !== "micro";
 
-  const { result: sentinel, payment, blocksEscalation } = await callSentinel(input, cfg);
+  let sentinel: SentinelResult;
+  let payment: VerifyTradeResult["payment"];
+  let blocksEscalation: boolean;
+  try {
+    const called = await callSentinel(input, cfg, target);
+    sentinel = called.result;
+    payment = called.payment;
+    blocksEscalation = called.blocksEscalation;
+  } catch (err) {
+    if (err instanceof RequestBindingRejected) return closedTrade(err.message, start);
+    throw err;
+  }
 
   if (blocksEscalation) {
     const verdict = sentinel.verdict === "BLOCK" ? "BLOCK" : "UNCERTAIN";

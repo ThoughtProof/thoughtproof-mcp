@@ -10,6 +10,13 @@
  * mandate quote is wired *into* evidence — never as a sibling field.
  */
 
+import { computeRequestHash } from "./request-binding.js";
+import {
+  headersForSentinelCall,
+  isRedirectResponse,
+  SENTINEL_TEST_URL_REQUIRED,
+} from "./sentinel-target.js";
+
 export const SENTINEL_VERIFY_URL = "https://sentinel.thoughtproof.ai/sentinel/verify";
 export const SENTINEL_OPENAPI_URL = "https://sentinel.thoughtproof.ai/openapi.json";
 export const DEFAULT_TIMEOUT_MS = 90_000;
@@ -20,6 +27,7 @@ export const ACTION_KINDS = [
   "value_transfer",
   "permission",
   "deploy_ship",
+  "local_command",
   "unknown",
 ] as const;
 
@@ -137,16 +145,29 @@ export interface SentinelResponse {
   meta?: Record<string, unknown>;
 }
 
+export interface DeploymentProtectionHeader {
+  name: string;
+  value: string;
+  /** Exact origin. The header is attached only when the request origin matches. */
+  origin: string;
+}
+
 export interface SentinelDecisionClientConfig {
   apiKey: string;
   url?: string;
+  /**
+   * When true, `url` is required. A missing url returns before fetch and
+   * does not use SENTINEL_VERIFY_URL.
+   */
+  testMode?: boolean;
+  deploymentProtection?: DeploymentProtectionHeader;
   timeoutMs?: number;
   tier?: "checkpoint" | "standard";
   fetchImpl?: typeof fetch;
 }
 
 export type SentinelCallResult =
-  | { ok: true; status: number; body: SentinelResponse }
+  | { ok: true; status: number; body: SentinelResponse; request: SentinelVerifyBody }
   | { ok: false; status: number; error: string };
 
 /** Collapse runs of whitespace so newline/spacing drift can be detected. */
@@ -284,6 +305,11 @@ export interface SentinelVerifyBody {
    * Sentinel #51/#60 reads `mandate.kind` and nested `mandate.action.kind`
    * (MCP `action.kind` maps onto the latter). No top-level `action` field —
    * that is not on the live whitelist. Kinds are never echoed into evidence.
+   * `local_command` uses this same shape. Structured local-command fields
+   * (`granted.workspace`, `granted.allowRemoteWrite`, `granted.allowNetwork`,
+   * `action.command`, `action.cwd`) are not sent: current Sentinel
+   * reconstructs `granted` / `action` and drops those keys, and this client
+   * does not invent defaults for them.
    */
   mandate?: {
     kind?: ActionKind;
@@ -358,25 +384,37 @@ export async function callSentinelDecision(
   cfg: SentinelDecisionClientConfig,
 ): Promise<SentinelCallResult> {
   const fetchImpl = cfg.fetchImpl ?? fetch;
-  const url = cfg.url ?? SENTINEL_VERIFY_URL;
   const timeoutMs = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   if (isBlankMandate(input.mandate)) {
     return { ok: false, status: 0, error: "mandate is required (empty or whitespace-only)" };
   }
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.3.1",
-    "X-Sentinel-Key": cfg.apiKey,
-  };
+  if (cfg.testMode && !cfg.url?.trim()) {
+    return { ok: false, status: 0, error: SENTINEL_TEST_URL_REQUIRED };
+  }
+
+  const url = cfg.url?.trim() || SENTINEL_VERIFY_URL;
+  const request = buildSentinelVerifyBody(input, cfg.tier ?? "checkpoint");
+  try {
+    computeRequestHash(request);
+  } catch {
+    return { ok: false, status: 0, error: "request binding rejected (JCS)" };
+  }
+  const headers = headersForSentinelCall({
+    url,
+    apiKey: cfg.apiKey,
+    userAgent: "thoughtproof-mcp/0.3.1",
+    protection: cfg.deploymentProtection,
+  });
 
   let res: Response;
   try {
     res = await fetchImpl(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(buildSentinelVerifyBody(input, cfg.tier ?? "checkpoint")),
+      body: JSON.stringify(request),
+      redirect: "manual",
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
@@ -385,6 +423,14 @@ export async function callSentinelDecision(
       return { ok: false, status: 0, error: `Sentinel timeout after ${timeoutMs}ms` };
     }
     return { ok: false, status: 0, error: `Sentinel network error: ${String(err)}` };
+  }
+
+  if (isRedirectResponse(res)) {
+    return {
+      ok: false,
+      status: res.status,
+      error: `Sentinel redirect refused (HTTP ${res.status})`,
+    };
   }
 
   const text = await res.text().catch(() => "");
@@ -398,7 +444,7 @@ export async function callSentinelDecision(
 
   try {
     const parsed = JSON.parse(text) as SentinelResponse;
-    return { ok: true, status: res.status, body: parsed };
+    return { ok: true, status: res.status, body: parsed, request };
   } catch {
     return {
       ok: false,

@@ -27,6 +27,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # npm test loads test/offline-fetch-guard.js and does not run test/live.
       - run: npm test
       - name: pack dry-run
         run: npm pack --dry-run
