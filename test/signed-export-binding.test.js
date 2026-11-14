@@ -629,6 +629,68 @@ describe("requestHash binding (synthetic; proves only the MCP check)", () => {
     assert.notEqual(computeRequestHash({ ...absent, mandate: null }), computeRequestHash(absent));
   });
 
+  it("signed UNCERTAIN without a matching requestHash stays UNCERTAIN", async () => {
+    const missing = issue(privateKey, "UNCERTAIN");
+    const missingEnv = await decide(requestA, missing, async () =>
+      new Response(JSON.stringify({ ...response("UNCERTAIN"), signed_export: missing }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    assert.equal(missingEnv.execute, false);
+    assert.equal(missingEnv.verdict, "UNCERTAIN");
+    assert.equal(missingEnv.signed_export_verification.code, "request_hash_missing");
+
+    const wrong = issueBound(
+      privateKey,
+      "UNCERTAIN",
+      buildSentinelVerifyBody({ ...requestA, proposed_action: "run_command: git status &" }, "checkpoint"),
+    );
+    const wrongEnv = await decide(requestA, wrong, async () =>
+      new Response(JSON.stringify({ ...response("UNCERTAIN"), signed_export: wrong }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    assert.equal(wrongEnv.execute, false);
+    assert.equal(wrongEnv.verdict, "UNCERTAIN");
+    assert.equal(wrongEnv.signed_export_verification.code, "request_hash_mismatch");
+
+    const matched = issueBound(privateKey, "UNCERTAIN", buildSentinelVerifyBody(requestA, "checkpoint"));
+    const matchedEnv = await decide(requestA, matched, async () =>
+      new Response(JSON.stringify({ ...response("UNCERTAIN"), signed_export: matched }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    assert.equal(matchedEnv.execute, false);
+    assert.equal(matchedEnv.verdict, "UNCERTAIN");
+    assert.equal(matchedEnv.signed_export_verification.code, "signed_not_allow");
+  });
+
+  it("does not send a body that contains a lone surrogate", async () => {
+    let fetches = 0;
+    const env = await verifyDecision(
+      {
+        mandate: "Work locally in this repo.",
+        proposed_action: "run_command: git status",
+        reasoning: "Inspect \uD800 the tree.",
+        mode: "sentinel",
+      },
+      {
+        sentinelApiKey: FIX_SENTINEL,
+        fetchImpl: async () => {
+          fetches += 1;
+          throw new Error("fetch must not run");
+        },
+      },
+    );
+    assert.equal(fetches, 0);
+    assert.equal(env.execute, false);
+    assert.notEqual(env.verdict, "ALLOW");
+    assert.match(env.objections.join(" "), /request binding rejected/);
+  });
+
   it("rejects a tampered signature even when requestHash matches", async () => {
     const artifact = issueBound(privateKey, "ALLOW", buildSentinelVerifyBody(requestA, "checkpoint"));
     const flipped = `0x${artifact.signature.slice(2, 3) === "a" ? "b" : "a"}${artifact.signature.slice(3)}`;

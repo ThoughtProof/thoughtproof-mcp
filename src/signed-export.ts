@@ -499,9 +499,29 @@ function requestHashesFromExports(
   return { ok: true, hashes };
 }
 
+function bindRequest(
+  body: unknown,
+  request: unknown,
+): { ok: true } | { ok: false; code: "request_hash_missing" | "request_hash_mismatch" } {
+  const hashes = requestHashesFromExports(body);
+  if (!hashes.ok || request === undefined) return { ok: false, code: "request_hash_missing" };
+  let expected: string;
+  try {
+    expected = computeRequestHash(request);
+  } catch {
+    return { ok: false, code: "request_hash_mismatch" };
+  }
+  if (!hashes.hashes.every((hash) => requestHashesEqual(hash, expected))) {
+    return { ok: false, code: "request_hash_mismatch" };
+  }
+  return { ok: true };
+}
+
 /**
  * Sentinel execute is true only when the signed verdict is ALLOW, fresh,
  * equal to the outer verdict, and requestHash matches this request.
+ * A signed non-BLOCK verdict also needs that match before it may escalate.
+ * BLOCK stays a hard stop and does not require requestHash.
  * The presented export is copied unchanged so the host can re-verify it.
  * The old binding flag is not consulted. mandateDigest, actionDigest, and
  * packageDigest do not satisfy requestHash.
@@ -548,39 +568,23 @@ export function gateOuterVerdict(
     };
   }
 
-  if (signed.toUpperCase() === "ALLOW") {
-    const hashes = requestHashesFromExports(body);
-    if (!hashes.ok || !request) {
+  const signedUpper = signed.toUpperCase();
+  // BLOCK does not escalate. Every other signed verdict can execute or be
+  // sent on to RV, so it needs a matching requestHash first.
+  if (signedUpper !== "BLOCK") {
+    const bound = bindRequest(body, request);
+    if (!bound.ok) {
       return {
-        verdict: "ERROR",
+        verdict: signedUpper === "ALLOW" ? "ERROR" : "UNCERTAIN",
         execute: false,
-        code: "request_hash_missing",
+        code: bound.code,
         ...presented,
-        verification: verificationOf(assessed, "request_hash_missing", false),
+        verification: verificationOf(assessed, bound.code, false),
       };
     }
-    let expected: string;
-    try {
-      expected = computeRequestHash(request);
-    } catch {
-      return {
-        verdict: "ERROR",
-        execute: false,
-        code: "request_hash_mismatch",
-        ...presented,
-        verification: verificationOf(assessed, "request_hash_mismatch", false),
-      };
-    }
-    const matches = hashes.hashes.every((hash) => requestHashesEqual(hash, expected));
-    if (!matches) {
-      return {
-        verdict: "ERROR",
-        execute: false,
-        code: "request_hash_mismatch",
-        ...presented,
-        verification: verificationOf(assessed, "request_hash_mismatch", false),
-      };
-    }
+  }
+
+  if (signedUpper === "ALLOW") {
     return {
       verdict: "ALLOW",
       execute: true,

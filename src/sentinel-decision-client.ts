@@ -10,6 +10,7 @@
  * mandate quote is wired *into* evidence — never as a sibling field.
  */
 
+import { computeRequestHash } from "./request-binding.js";
 import {
   headersForSentinelCall,
   isRedirectResponse,
@@ -395,6 +396,11 @@ export async function callSentinelDecision(
 
   const url = cfg.url?.trim() || SENTINEL_VERIFY_URL;
   const request = buildSentinelVerifyBody(input, cfg.tier ?? "checkpoint");
+  try {
+    computeRequestHash(request);
+  } catch {
+    return { ok: false, status: 0, error: "request binding rejected (JCS)" };
+  }
   const headers = headersForSentinelCall({
     url,
     apiKey: cfg.apiKey,

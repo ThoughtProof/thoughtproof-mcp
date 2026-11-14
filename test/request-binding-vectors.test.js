@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import {
   REQUEST_BINDING_PROFILE,
+  RequestBindingRejected,
   canonicalRequestBinding,
   computeRequestHash,
   jcs,
@@ -32,6 +33,7 @@ describe("request-binding v2 vectors", () => {
     assert.equal(doc.profile, REQUEST_BINDING_PROFILE);
     assert.equal(doc.profile, "thoughtproof.mcp.request_binding.v2");
     for (const vector of doc.vectors) {
+      if (vector.reject) continue;
       assert.equal(vector.envelope.profile, REQUEST_BINDING_PROFILE);
       assert.deepEqual(vector.envelope.request, vector.body);
       assert.equal(jcs(vector.envelope), vector.jcs);
@@ -87,5 +89,17 @@ describe("request-binding v2 vectors", () => {
     assert.equal(nulled.body.mandate, null);
     assert.equal(Object.hasOwn(decision.body, "mandate"), false);
     assert.notEqual(nulled.requestHash, decision.requestHash);
+  });
+
+  it("rejects lone surrogates and still hashes a valid surrogate pair", () => {
+    const rejected = doc.vectors.filter((item) => item.reject);
+    assert.ok(rejected.length >= 3);
+    for (const vector of rejected) {
+      assert.throws(() => jcs(vector.body), RequestBindingRejected);
+      assert.throws(() => computeRequestHash(vector.body), RequestBindingRejected);
+    }
+    const emoji = byId("valid-surrogate-pair");
+    assert.equal(emoji.body.claim.includes("😀"), true);
+    assert.equal(computeRequestHash(emoji.body), emoji.requestHash);
   });
 });

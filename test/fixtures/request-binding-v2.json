@@ -208,6 +208,54 @@
       "requestHash": "sha256:4bf990f1995840880689b4eb0a19100e9f713f4c003e51eb58aa1596b3fad76b",
       "note": "mandate: null is present. It is not the same as an absent mandate key.",
       "differsFrom": "decision-builder"
+    },
+    {
+      "id": "valid-surrogate-pair",
+      "note": "U+1F600 is a high/low surrogate pair and must hash. Not a lone surrogate.",
+      "body": {
+        "claim": "run_command: git status 😀",
+        "evidence": "emoji pair",
+        "mode": "action_authorization",
+        "tier": "checkpoint"
+      },
+      "envelope": {
+        "profile": "thoughtproof.mcp.request_binding.v2",
+        "request": {
+          "claim": "run_command: git status 😀",
+          "evidence": "emoji pair",
+          "mode": "action_authorization",
+          "tier": "checkpoint"
+        }
+      },
+      "jcs": "{\"profile\":\"thoughtproof.mcp.request_binding.v2\",\"request\":{\"claim\":\"run_command: git status 😀\",\"evidence\":\"emoji pair\",\"mode\":\"action_authorization\",\"tier\":\"checkpoint\"}}",
+      "requestHash": "sha256:c1d4099f4e6a24a911c2e882ad0793ba1ad31b6e198b00af349a59d2c913585f"
+    },
+    {
+      "id": "lone-high-surrogate-value",
+      "reject": true,
+      "where": "value",
+      "note": "Lone high surrogate U+D800 in a string value. RFC 8785 requires an error.",
+      "body": {
+        "claim": "\ud800"
+      }
+    },
+    {
+      "id": "lone-low-surrogate-value",
+      "reject": true,
+      "where": "value",
+      "note": "Lone low surrogate U+DC00 in a string value. RFC 8785 requires an error.",
+      "body": {
+        "claim": "\udc00"
+      }
+    },
+    {
+      "id": "lone-surrogate-key",
+      "reject": true,
+      "where": "key",
+      "note": "Lone high surrogate U+D800 as an object key. RFC 8785 requires an error.",
+      "body": {
+        "\ud800": "kept"
+      }
     }
   ]
 }

@@ -22,6 +22,8 @@ Shared bodies, JCS strings, and hashes: `test/fixtures/request-binding-v2.json`.
 
 `<API body>` is the JSON object this client serialized on `POST /sentinel/verify`. It is built once. That same object is hashed and `JSON.stringify`'d onto the wire. The hash is of the object via JCS, not of one particular serialization, so key order and insignificant whitespace in the JSON text do not change it. Whitespace inside strings is preserved and does change it. JCS does not trim, case-fold, or Unicode-normalize text.
 
+A string value or object key that contains a lone UTF-16 surrogate is not well-formed Unicode. RFC 8785 requires the canonicalization to fail. This encoder throws, and the caller does not send the request (`execute: false` on the decision path, `UNCERTAIN` on the trade path, no fetch). A valid surrogate pair, such as an emoji, is hashed. Sentinel must reject lone surrogates the same way and must not sign a canonicalization of them.
+
 Headers and credentials are not part of the preimage. That includes `X-Sentinel-Key`, `PAYMENT-SIGNATURE`, `User-Agent`, and any deployment-protection header.
 
 ## What is in the body
@@ -58,9 +60,13 @@ Two tool calls that produce the same body have the same hash. A `Context:` secti
 
 ## What this MCP requires before execute
 
-The existing signature, export digest, key, receipt id, fresh `validUntil`, and ALLOW match still apply. In addition, every present export canonical must carry `requestHash` in the form above, and that value must equal the hash of the body object this call sent. `mandateDigest`, `actionDigest`, and `packageDigest` do not satisfy it.
+The existing signature, export digest, key, receipt id, fresh `validUntil`, and verdict match still apply. In addition, every present export canonical must carry `requestHash` in the form above, and that value must equal the hash of the body object this call sent, before a signed ALLOW may execute and before any other signed non-BLOCK verdict may be escalated. `BLOCK` stays a hard stop and does not need `requestHash`. `mandateDigest`, `actionDigest`, and `packageDigest` do not satisfy `requestHash`.
 
-Missing hash: `request_hash_missing`, `execute: false`. Outer ALLOW is reported as `ERROR` on the decision path and as not ALLOW on the trade path. Mismatch: `request_hash_mismatch`, same close. No flag turns execute back on. A trade call that fails this check does not call RV.
+Missing hash: `request_hash_missing`. Mismatch: `request_hash_mismatch`. On a signed ALLOW the decision verdict is `ERROR` and `execute` is false. On a signed UNCERTAIN, HOLD, or REVIEW the verdict is `UNCERTAIN` and `execute` is false. No flag turns execute back on. A trade call that fails this check does not call RV, even if a later RV response would have been ALLOW. A signed UNCERTAIN whose `requestHash` matches may still escalate to RV on a non-micro stake, as before.
+
+## v1 limitation
+
+This binding proof covers the Sentinel path, including `verify_trade` at micro stake. It does not cover the full RV pipeline. `situation` is not in the Sentinel body, so it is not bound. This client does not cryptographically verify an RV response against the RV request that was just sent.
 
 ## What the export binds today
 
@@ -74,7 +80,7 @@ Unchanged from the previous note, and still not sufficient:
 
 Do not implement this in Sentinel until it is approved on its own.
 
-1. After parsing the verify request, compute `requestHash` as specified here over the parsed body. Use every key that parsed. Do not trim strings. Do not drop unknown keys. Do not reconstruct an earlier tool-argument shape.
+1. After parsing the verify request, compute `requestHash` as specified here over the parsed body. Use every key that parsed. Do not trim strings. Do not drop unknown keys. Do not reconstruct an earlier tool-argument shape. Reject a lone surrogate in a key or a value. Do not canonicalize it.
 2. Sentinel computes that hash itself. It must not copy a client-supplied hash into the signature without recomputing it. A field inside the body is just more body content.
 3. Write the same `requestHash` into the v1 and v2 canonical bodies before signing. If the preimage cannot be built, do not issue an ALLOW export.
 4. Leave `mandateDigest`, `actionDigest`, and `packageDigest` as they are. They are not this field.

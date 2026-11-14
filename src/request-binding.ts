@@ -28,10 +28,39 @@ export function requestBindingEnvelope(request: unknown): RequestBindingEnvelope
 }
 
 /**
+ * RFC 8785 rejects a string that contains a lone UTF-16 surrogate.
+ * A high surrogate must be followed by a low surrogate. An emoji is a pair
+ * and is accepted. Sentinel must apply the same rule.
+ */
+export class RequestBindingRejected extends Error {
+  constructor() {
+    super("request binding rejected (JCS)");
+    this.name = "RequestBindingRejected";
+  }
+}
+
+function assertWellFormedUnicode(text: string): void {
+  for (let i = 0; i < text.length; i += 1) {
+    const unit = text.charCodeAt(i);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = text.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        throw new RequestBindingRejected();
+      }
+      i += 1;
+      continue;
+    }
+    if (unit >= 0xdc00 && unit <= 0xdfff) {
+      throw new RequestBindingRejected();
+    }
+  }
+}
+
+/**
  * RFC 8785 JSON Canonicalization Scheme for JSON values.
  * Object keys are sorted by UTF-16 code unit. Undefined object members are
  * omitted (same as JSON.stringify). Undefined array elements become null.
- * Strings are not trimmed or normalized.
+ * Strings are not trimmed or normalized. Lone surrogates throw.
  */
 export function jcs(value: unknown): string {
   return encode(value);
@@ -40,7 +69,10 @@ export function jcs(value: unknown): string {
 function encode(value: unknown): string {
   if (value === null) return "null";
   if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "string") return JSON.stringify(value);
+  if (typeof value === "string") {
+    assertWellFormedUnicode(value);
+    return JSON.stringify(value);
+  }
   if (typeof value === "number") return encodeNumber(value);
   if (Array.isArray(value)) {
     const parts: string[] = [];
@@ -55,17 +87,18 @@ function encode(value: unknown): string {
     const keys = Object.keys(record).sort();
     const parts: string[] = [];
     for (const key of keys) {
+      assertWellFormedUnicode(key);
       const member = record[key];
       if (member === undefined) continue;
       parts.push(`${JSON.stringify(key)}:${encode(member)}`);
     }
     return `{${parts.join(",")}}`;
   }
-  throw new Error("JCS: unsupported value");
+  throw new RequestBindingRejected();
 }
 
 function encodeNumber(value: number): string {
-  if (!Number.isFinite(value)) throw new Error("JCS: non-finite number");
+  if (!Number.isFinite(value)) throw new RequestBindingRejected();
   if (Object.is(value, -0)) return "0";
   return JSON.stringify(value);
 }

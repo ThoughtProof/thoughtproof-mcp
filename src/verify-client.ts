@@ -19,6 +19,7 @@
 // Sentinel call (Base eip155:8453 or GOAT eip155:2345) and the settlement
 // receipt is surfaced back to the caller.
 
+import { computeRequestHash, RequestBindingRejected } from "./request-binding.js";
 import { SENTINEL_VERIFY_URL } from "./sentinel-decision-client.js";
 import {
   headersForSentinelCall,
@@ -193,6 +194,12 @@ async function callSentinel(
   const fetchImpl = cfg.fetchImpl ?? fetch;
   const url = target.url?.trim() || SENTINEL_VERIFY_URL;
   const request = buildTradeVerifyBody(input, cfg.sentinelTier ?? "checkpoint");
+  try {
+    computeRequestHash(request);
+  } catch (err) {
+    if (err instanceof RequestBindingRejected) throw err;
+    throw new RequestBindingRejected();
+  }
   const headers = headersForSentinelCall({
     url,
     apiKey: cfg.apiKey,
@@ -367,7 +374,18 @@ export async function verifyTrade(
   const stakeLevel = input.stakeLevel ?? "high";
   const escalateToRv = stakeLevel !== "micro";
 
-  const { result: sentinel, payment, blocksEscalation } = await callSentinel(input, cfg, target);
+  let sentinel: SentinelResult;
+  let payment: VerifyTradeResult["payment"];
+  let blocksEscalation: boolean;
+  try {
+    const called = await callSentinel(input, cfg, target);
+    sentinel = called.result;
+    payment = called.payment;
+    blocksEscalation = called.blocksEscalation;
+  } catch (err) {
+    if (err instanceof RequestBindingRejected) return closedTrade(err.message, start);
+    throw err;
+  }
 
   if (blocksEscalation) {
     const verdict = sentinel.verdict === "BLOCK" ? "BLOCK" : "UNCERTAIN";

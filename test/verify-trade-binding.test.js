@@ -230,4 +230,82 @@ describe("verify_trade request binding", () => {
     assert.equal(JSON.stringify(foreign).includes("test-bypass-not-a-secret"), false);
     assert.equal(JSON.stringify(foreign).includes("pay-sig-test-only"), false);
   });
+
+  it("signed UNCERTAIN without a matching requestHash does not reach RV", async () => {
+    const cases = [
+      { name: "missing", artifact: issue(privateKey, "UNCERTAIN") },
+      {
+        name: "wrong",
+        artifact: issue(privateKey, "UNCERTAIN", buildTradeVerifyBody({ ...TRADE, action: "other" }, "checkpoint")),
+      },
+    ];
+    for (const stakeLevel of ["high", "micro"]) {
+      for (const item of cases) {
+        let rv = 0;
+        const result = await verifyTrade({ ...TRADE, stakeLevel }, {
+          apiKey: FIX_KEY,
+          signedBinding: { keysDoc: keys, nowSeconds: NOW, env: {} },
+          fetchImpl: async (url) => {
+            if (String(url).includes("/v1/check")) {
+              rv += 1;
+              return new Response(JSON.stringify({ verdict: "ALLOW", summary: "would allow" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+            return new Response(
+              JSON.stringify({ ...allowResponse(item.artifact), verdict: "UNCERTAIN" }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          },
+        });
+        assert.equal(rv, 0, `${stakeLevel} ${item.name}`);
+        assert.equal(result.verdict, "UNCERTAIN", `${stakeLevel} ${item.name}`);
+        assert.doesNotMatch(result.recommendation, /Safe to execute/);
+      }
+    }
+  });
+
+  it("signed UNCERTAIN with a matching requestHash may still escalate", async () => {
+    let rv = 0;
+    const result = await verifyTrade({ ...TRADE, stakeLevel: "high" }, {
+      apiKey: FIX_KEY,
+      signedBinding: { keysDoc: keys, nowSeconds: NOW, env: {} },
+      fetchImpl: async (url) => {
+        if (String(url).includes("/v1/check")) {
+          rv += 1;
+          return new Response(JSON.stringify({ verdict: "ALLOW", summary: "panel allow" }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            ...allowResponse(issue(privateKey, "UNCERTAIN", body)),
+            verdict: "UNCERTAIN",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      },
+    });
+    assert.equal(rv, 1);
+    assert.equal(result.verdict, "ALLOW");
+  });
+
+  it("a lone surrogate is not sent", async () => {
+    let fetches = 0;
+    const result = await verifyTrade(
+      { ...TRADE, reasoning: "higher\uD800highs" },
+      {
+        apiKey: FIX_KEY,
+        fetchImpl: async () => {
+          fetches += 1;
+          throw new Error("fetch must not run");
+        },
+      },
+    );
+    assert.equal(fetches, 0);
+    assert.equal(result.verdict, "UNCERTAIN");
+    assert.match(result.objections[0].explanation, /request binding rejected/);
+  });
 });
