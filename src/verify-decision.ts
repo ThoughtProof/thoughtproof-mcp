@@ -29,7 +29,9 @@ import {
   type SentinelObjection,
   type SentinelResponse,
 } from "./sentinel-decision-client.js";
+import type { RequestBindingInput } from "./request-binding.js";
 import { routeDecision, type DecisionMode, type DecisionSurface } from "./route-decision.js";
+import { SENTINEL_TEST_URL_REQUIRED } from "./sentinel-target.js";
 import {
   gateOuterVerdict,
   type SentinelBindingOptions,
@@ -111,6 +113,18 @@ export interface VerifyDecisionConfig {
   sentinelApiKey?: string;
   dqlUrl?: string;
   sentinelUrl?: string;
+  /** When true, a missing sentinelUrl aborts before fetch. No production fallback. */
+  sentinelTestMode?: boolean;
+  /**
+   * Set when the protection header env is present but cannot be scoped.
+   * The sentinel path returns this error and does not fetch.
+   */
+  sentinelTargetError?: string;
+  /**
+   * Header attached only when the request origin equals `origin`.
+   * The value comes from the environment. It is not logged.
+   */
+  deploymentProtection?: { name: string; value: string; origin: string };
   timeoutMs?: number;
   sandbox?: boolean;
   fetchImpl?: typeof fetch;
@@ -368,8 +382,9 @@ export function mapSentinelEnvelope(
   body: SentinelResponse,
   inReplyTo?: string,
   binding?: SentinelBindingOptions,
+  request?: RequestBindingInput,
 ): DecisionEnvelope {
-  const gated = gateOuterVerdict(body.verdict, body, binding);
+  const gated = gateOuterVerdict(body.verdict, body, binding, request);
   const verdict = gated.verdict;
   const execute = gated.execute;
   const receipt_id = String(body.id ?? "");
@@ -497,6 +512,18 @@ export async function verifyDecision(
       return mapDqlEnvelope(result.body, inReplyTo);
     }
 
+    if (cfg.sentinelTargetError) {
+      return errorEnvelope(
+        "sentinel",
+        cfg.sentinelTargetError,
+        "",
+        inReplyTo,
+        "SENTINEL_TARGET_REJECTED",
+      );
+    }
+    if (cfg.sentinelTestMode && !cfg.sentinelUrl?.trim()) {
+      return errorEnvelope("sentinel", SENTINEL_TEST_URL_REQUIRED, "", inReplyTo, "SENTINEL_URL_REQUIRED");
+    }
     const apiKey = cfg.sentinelApiKey?.trim();
     if (!apiKey) {
       return errorEnvelope("sentinel", "Sentinel key not configured", "", inReplyTo);
@@ -504,11 +531,13 @@ export async function verifyDecision(
     const result = await callSentinelDecision(repaired, {
       apiKey,
       url: cfg.sentinelUrl,
+      testMode: cfg.sentinelTestMode === true,
+      deploymentProtection: cfg.deploymentProtection,
       timeoutMs: cfg.timeoutMs,
       fetchImpl: cfg.fetchImpl,
     });
     if (!result.ok) return errorEnvelope("sentinel", result.error, "", inReplyTo);
-    return mapSentinelEnvelope(result.body, inReplyTo, cfg.signedBinding);
+    return mapSentinelEnvelope(result.body, inReplyTo, cfg.signedBinding, repaired);
   } catch (err) {
     return errorEnvelope(surface, String(err), "", inReplyTo);
   }

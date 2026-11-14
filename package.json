@@ -12,7 +12,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node --test test/*.test.js",
+    "test": "node --import ./test/offline-fetch-guard.js --test test/*.test.js",
+    "test:live": "node --test test/live/*.test.js",
     "inspect": "npx @modelcontextprotocol/inspector tsx src/index.ts",
     "prepublishOnly": "npm run build && npm test"
   },

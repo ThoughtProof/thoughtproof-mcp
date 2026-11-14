@@ -1,5 +1,13 @@
 # Unpublished 0.4.0-dev
 
+## Request binding and offline tests (unpublished tree)
+
+`execute: true` on the Sentinel route now also requires `requestHash` inside every present signed export canonical. The hash is SHA-256 of the flat JCS document in [docs/sentinel-request-binding.md](./docs/sentinel-request-binding.md) (`profile`, full `mandate`, full `proposed_action`, `reasoning`, and optional `context` / kinds). The export digest, `mandateDigest`, `actionDigest`, and `packageDigest` do not satisfy it. A missing or different hash is `execute: false` (`request_hash_missing` or `request_hash_mismatch`). Current Sentinel does not issue `requestHash`. The same document is the Sentinel change proposal; Sentinel itself is unchanged.
+
+`SENTINEL_TEST_MODE=1` requires `SENTINEL_URL`. A missing URL returns before fetch and does not use the production host. `SENTINEL_DEPLOYMENT_PROTECTION_HEADER` and `SENTINEL_DEPLOYMENT_PROTECTION` supply a header name and value. The value is never stored in the repo. The header is sent only when the request origin equals the origin of `SENTINEL_URL`. Redirects are `redirect: "manual"` and fail closed, so the header is not forwarded.
+
+`npm test` loads `test/offline-fetch-guard.js` and does not run `test/live/`. `npm run test:live` is the opt-in OpenAPI and `verify_claim` check. No version bump and no npm publish.
+
 ## Local command kind (unpublished tree)
 
 `verify_before_action` / `verify_decision` accept ActionKind `local_command` on `mandate_kind` and `action_kind` (local shell / coding-agent commands). Enum: `informational | value_transfer | permission | deploy_ship | local_command | unknown`. Omit rather than guess. Invalid values still fail closed (`HOST_KIND_INVALID`) and do not call Sentinel.

@@ -6,9 +6,11 @@
  *   sha256(transported canonical) → validUntil vs verifier clock.
  *
  * On the Sentinel path, execute is granted only by gateOuterVerdict, and only
- * when the signed verdict is ALLOW, validUntil is still fresh, and that
- * verdict matches the outer verdict. A valid signature never promotes
- * BLOCK / UNCERTAIN / anything else to ALLOW. No flag can skip this.
+ * when the signed verdict is ALLOW, validUntil is still fresh, that verdict
+ * matches the outer verdict, and every present export canonical carries
+ * requestHash for this mandate and proposed action. A valid signature never
+ * promotes BLOCK / UNCERTAIN / anything else to ALLOW. An export that does
+ * not carry requestHash does not execute. No flag can skip this.
  *
  * Key material is the pinned public documents in sentinel-key-pin.ts.
  * SENTINEL_API_KEY / X-Sentinel-Key is an API credential, not this key.
@@ -24,11 +26,20 @@ import {
   type KeyObject,
 } from "node:crypto";
 import {
+  computeRequestHash,
+  REQUEST_HASH_FIELD,
+  REQUEST_HASH_RE,
+  requestHashesEqual,
+  type RequestBindingInput,
+} from "./request-binding.js";
+import {
   PINNED_EXPORT_KEYS,
   PINNED_VALIDATION_KEYS,
   type ExportKeyEntry,
   type ExportKeysDoc,
 } from "./sentinel-key-pin.js";
+
+export type { RequestBindingInput };
 
 export const EXPORT_DOMAIN = "thoughtproof.sentinel.export.v1";
 export const EXPORT_ALG = "Ed25519";
@@ -461,15 +472,48 @@ function verificationOf(
   return verification;
 }
 
+function requestHashesFromExports(
+  body: unknown,
+): { ok: true; hashes: string[] } | { ok: false; code: "request_hash_missing" } {
+  if (!isPlainObject(body)) return { ok: false, code: "request_hash_missing" };
+  const fields: ("signed_export" | "signed_export_v2")[] = [];
+  if (Object.prototype.hasOwnProperty.call(body, "signed_export")) fields.push("signed_export");
+  if (Object.prototype.hasOwnProperty.call(body, "signed_export_v2")) fields.push("signed_export_v2");
+  if (fields.length === 0) return { ok: false, code: "request_hash_missing" };
+  const hashes: string[] = [];
+  for (const field of fields) {
+    const artifact = body[field];
+    if (!isPlainObject(artifact) || typeof artifact.canonical !== "string") {
+      return { ok: false, code: "request_hash_missing" };
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(artifact.canonical);
+    } catch {
+      return { ok: false, code: "request_hash_missing" };
+    }
+    if (!isPlainObject(parsed)) return { ok: false, code: "request_hash_missing" };
+    const hash = parsed[REQUEST_HASH_FIELD];
+    if (typeof hash !== "string" || !REQUEST_HASH_RE.test(hash)) {
+      return { ok: false, code: "request_hash_missing" };
+    }
+    hashes.push(hash);
+  }
+  return { ok: true, hashes };
+}
+
 /**
  * Sentinel execute is true only when the signed verdict is ALLOW, fresh,
- * and equal to the outer verdict. The presented export is copied unchanged
- * so the host can re-verify it. The old binding flag is not consulted.
+ * equal to the outer verdict, and requestHash matches this request.
+ * The presented export is copied unchanged so the host can re-verify it.
+ * The old binding flag is not consulted. mandateDigest, actionDigest, and
+ * packageDigest do not satisfy requestHash.
  */
 export function gateOuterVerdict(
   outerVerdict: unknown,
   body: unknown,
   options?: SentinelBindingOptions,
+  request?: RequestBindingInput,
 ): OuterVerdictGate {
   noteIgnoredBindingFlag(bindingEnv(options));
   const outer = String(outerVerdict ?? "ERROR");
@@ -508,6 +552,27 @@ export function gateOuterVerdict(
   }
 
   if (signed.toUpperCase() === "ALLOW") {
+    const hashes = requestHashesFromExports(body);
+    if (!hashes.ok || !request) {
+      return {
+        verdict: "ERROR",
+        execute: false,
+        code: "request_hash_missing",
+        ...presented,
+        verification: verificationOf(assessed, "request_hash_missing", false),
+      };
+    }
+    const expected = computeRequestHash(request);
+    const matches = hashes.hashes.every((hash) => requestHashesEqual(hash, expected));
+    if (!matches) {
+      return {
+        verdict: "ERROR",
+        execute: false,
+        code: "request_hash_mismatch",
+        ...presented,
+        verification: verificationOf(assessed, "request_hash_mismatch", false),
+      };
+    }
     return {
       verdict: "ALLOW",
       execute: true,

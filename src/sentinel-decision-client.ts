@@ -10,6 +10,8 @@
  * mandate quote is wired *into* evidence — never as a sibling field.
  */
 
+import { SENTINEL_TEST_URL_REQUIRED } from "./sentinel-target.js";
+
 export const SENTINEL_VERIFY_URL = "https://sentinel.thoughtproof.ai/sentinel/verify";
 export const SENTINEL_OPENAPI_URL = "https://sentinel.thoughtproof.ai/openapi.json";
 export const DEFAULT_TIMEOUT_MS = 90_000;
@@ -138,9 +140,22 @@ export interface SentinelResponse {
   meta?: Record<string, unknown>;
 }
 
+export interface DeploymentProtectionHeader {
+  name: string;
+  value: string;
+  /** Exact origin. The header is attached only when the request origin matches. */
+  origin: string;
+}
+
 export interface SentinelDecisionClientConfig {
   apiKey: string;
   url?: string;
+  /**
+   * When true, `url` is required. A missing url returns before fetch and
+   * does not use SENTINEL_VERIFY_URL.
+   */
+  testMode?: boolean;
+  deploymentProtection?: DeploymentProtectionHeader;
   timeoutMs?: number;
   tier?: "checkpoint" | "standard";
   fetchImpl?: typeof fetch;
@@ -359,23 +374,44 @@ export function buildSentinelVerifyBody(
   return body;
 }
 
+function requestOrigin(url: string): string | undefined {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function isRedirectResponse(res: Response): boolean {
+  if (res.status >= 300 && res.status < 400) return true;
+  return res.status === 0 && res.type === "opaqueredirect";
+}
+
 export async function callSentinelDecision(
   input: SentinelDecisionInput,
   cfg: SentinelDecisionClientConfig,
 ): Promise<SentinelCallResult> {
   const fetchImpl = cfg.fetchImpl ?? fetch;
-  const url = cfg.url ?? SENTINEL_VERIFY_URL;
   const timeoutMs = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   if (isBlankMandate(input.mandate)) {
     return { ok: false, status: 0, error: "mandate is required (empty or whitespace-only)" };
   }
 
+  if (cfg.testMode && !cfg.url?.trim()) {
+    return { ok: false, status: 0, error: SENTINEL_TEST_URL_REQUIRED };
+  }
+
+  const url = cfg.url?.trim() || SENTINEL_VERIFY_URL;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "User-Agent": "thoughtproof-mcp/0.3.1",
     "X-Sentinel-Key": cfg.apiKey,
   };
+  const protection = cfg.deploymentProtection;
+  if (protection && requestOrigin(url) === protection.origin) {
+    headers[protection.name] = protection.value;
+  }
 
   let res: Response;
   try {
@@ -383,6 +419,7 @@ export async function callSentinelDecision(
       method: "POST",
       headers,
       body: JSON.stringify(buildSentinelVerifyBody(input, cfg.tier ?? "checkpoint")),
+      redirect: "manual",
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
@@ -391,6 +428,14 @@ export async function callSentinelDecision(
       return { ok: false, status: 0, error: `Sentinel timeout after ${timeoutMs}ms` };
     }
     return { ok: false, status: 0, error: `Sentinel network error: ${String(err)}` };
+  }
+
+  if (isRedirectResponse(res)) {
+    return {
+      ok: false,
+      status: res.status,
+      error: `Sentinel redirect refused (HTTP ${res.status})`,
+    };
   }
 
   const text = await res.text().catch(() => "");

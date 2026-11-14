@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 Not published. This tree is unpublished **0.4.0-dev** and is the `dqla_` path. **0.3.1** is reserved for the metadata-only listing tarball cut from the real **0.3.0** tree (`d70470b`) and is not the `dqla_` path. **0.3.0** on npm is also not the `dqla_` path.
 
 ### Added
+- Sentinel `execute: true` requires signed `requestHash` over the full mandate and proposed action ([docs/sentinel-request-binding.md](./docs/sentinel-request-binding.md)). An export without that hash does not execute. `SENTINEL_TEST_MODE` refuses a missing `SENTINEL_URL` before fetch. Deployment-protection header comes from the environment and is not sent across origins or redirects. `npm test` is offline; `npm run test:live` is opt-in.
 - ActionKind `local_command` on `mandate_kind` / `action_kind`. On `mode=auto`, a command-form `proposed_action` (`run_command:`, a `$` prompt line, or a fenced code block) or `action_kind=local_command` routes to Sentinel ahead of the spend heuristic. Explicit `mode` still wins. No structured `granted` / `action.command` fields are sent. No npm publish.
 - Host-declared kinds: send nested `mandate.action.kind` (not evidence prose). Removes structural_fact-class asymmetry for `action.kind` (review CR on #30).
 - Sentinel-mode `verify_before_action` / `verify_decision` claim is an authorization assertion (`"<proposed_action> is authorized by the principal's mandate"`), not an echo of `proposed_action` (issue #21). Cascade scores authorization, not restatement.
