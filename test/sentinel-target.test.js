@@ -97,9 +97,12 @@ describe("sentinel target", () => {
 
     assert.equal(seen.length, 3);
     assert.equal(seen[0].headers["x-deployment-protection"], protection.value);
+    assert.equal(seen[0].headers["X-Sentinel-Key"], FIX_KEY);
     assert.equal(seen[0].redirect, "manual");
     assert.equal(seen[1].headers["x-deployment-protection"], undefined);
+    assert.equal(seen[1].headers["X-Sentinel-Key"], undefined);
     assert.equal(seen[2].headers["x-deployment-protection"], undefined);
+    assert.equal(seen[2].headers["X-Sentinel-Key"], undefined);
     for (const call of seen) {
       assert.equal(call.redirect, "manual");
     }

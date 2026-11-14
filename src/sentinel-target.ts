@@ -76,3 +76,42 @@ export function resolveSentinelTarget(env: NodeJS.ProcessEnv): SentinelTarget {
 
 export const SENTINEL_TEST_URL_REQUIRED =
   "SENTINEL_TEST_MODE requires SENTINEL_URL (no production fallback)";
+
+export function originOf(url: string): string | undefined {
+  try {
+    const origin = new URL(url).origin;
+    return origin && origin !== "null" ? origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function isRedirectResponse(res: Response): boolean {
+  if (res.status >= 300 && res.status < 400) return true;
+  return res.status === 0 && res.type === "opaqueredirect";
+}
+
+/**
+ * Credential and protection headers go only to the protection origin when
+ * one is configured. A different origin gets neither. With no protection
+ * config, the API credential is sent to the URL this call is making.
+ */
+export function headersForSentinelCall(options: {
+  url: string;
+  apiKey?: string;
+  paymentSignature?: string;
+  userAgent?: string;
+  protection?: DeploymentProtection;
+}): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (options.userAgent) headers["User-Agent"] = options.userAgent;
+  const origin = originOf(options.url);
+  const protection = options.protection;
+  const foreign = Boolean(protection) && origin !== protection?.origin;
+  if (!foreign && options.apiKey) headers["X-Sentinel-Key"] = options.apiKey;
+  if (!foreign && options.paymentSignature) headers["PAYMENT-SIGNATURE"] = options.paymentSignature;
+  if (!foreign && protection && origin === protection.origin) {
+    headers[protection.name] = protection.value;
+  }
+  return headers;
+}

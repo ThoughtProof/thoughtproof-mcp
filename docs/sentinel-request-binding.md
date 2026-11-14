@@ -1,106 +1,82 @@
-# Sentinel request binding
+# Sentinel request binding v2
 
-Status: MCP check is in this tree. Sentinel does not issue `requestHash` yet. Until it does, a signed ALLOW on `verify_before_action` / `verify_decision` returns `execute: false`. This file is the contract and the change proposal. It does not change Sentinel.
+Status: this MCP checks `requestHash`. Sentinel does not issue it yet. Until Sentinel does, a signed ALLOW on `verify_before_action`, `verify_decision`, or `verify_trade` does not execute. This file is the contract and the change proposal. It does not change Sentinel.
 
-The positive test that returns `execute: true` uses a synthetic export signed by an ephemeral key in the test process. That fixture proves only that this MCP compares `requestHash`. It is not a Sentinel issuance and it is not evidence that production Sentinel binds the command.
+Positive tests that return ALLOW use a synthetic export signed by an ephemeral key created in the test process. That proves only this MCP's comparison. It is not a Sentinel issuance and it is not production evidence. The committed v1 and v2 export fixtures use kid `tp-sentinel-export-ed25519-2026-09-vector`. Those files are format vectors for the export envelope, not request-binding evidence.
 
-## What the signed export binds today
+Shared bodies, JCS strings, and hashes: `test/fixtures/request-binding-v2.json`. Both `buildSentinelVerifyBody` and `buildTradeVerifyBody` are checked against that file.
 
-Sentinel creates the export and signs it. This MCP checks the signature, the export digest, expiry, the receipt id, and the verdict, then passes the export through unchanged. Before this change it did not receive the current mandate or proposed action, so one validly signed ALLOW could be replayed for a different command.
-
-Sources below are `ThoughtProof/thoughtproof-sentinel` main (read for this note; not modified).
-
-### Export digest
-
-`signed_export.digest` and `signed_export_v2.digest` are `0x` plus the SHA-256 hex of the transported canonical string (UTF-8). The Ed25519 signature is over:
-
-```text
-"thoughtproof.sentinel.export.v1" || 0x00 || JCS(envelope)
-```
-
-The envelope is the flat object `{ artifactSchema, verificationId, canonical, digest, keyId, alg, signedAt, validUntil? }`. The signature therefore binds those bytes, including the canonical string. It does not by itself bind a field that is absent from that canonical string.
-
-The canonical body (`src/canonical-verdict.ts`, `buildCanonicalSentinelVerdict`) is a projection of the verdict: schema, verification id, API version, tier, mode, verdict, confidence, objections, reasoning, evaluatedAt, models, and, only when present, `packageDigest`, `proofStrength`, and `gate`. v2 adds optional provenance (`releaseId`, `policy`, `potCli`, `mandateDigest`, `actionDigest`, `mandateSource`, gate `checked` / `skipped`). The MCP path's full mandate text and the command are not fields of that projection.
-
-### mandateDigest and actionDigest
-
-`src/package-digest.ts` defines both as `sha256:` plus the lowercase hex of SHA-256 over `32 random bytes || UTF-8 JCS(value)`.
-
-- `mandateDigest` hashes the structured `mandate` object.
-- `actionDigest` hashes `mandate.action` only, when that property is present.
-
-The salt is returned to the caller as `meta.digest_salt` (`api/sentinel/verify.ts`) and is not a field of the signed canonical (`canonical-verdict.ts`: "The salt itself is not in this body"). The digests are copied into v2 only, and the comments mark them as not a verdict input.
-
-On this MCP's current call, `buildSentinelVerifyBody` sends `mandate` only as `{ kind?, action?: { kind } }`, or omits it. The full mandate text and the command are inside the `evidence` string (and the command is also inside `claim` plus the suffix ` is authorized by the principal's mandate`). A salted hash of `{ kind: "local_command" }` does not contain the mandate text or the command. This MCP does not treat `mandateDigest` or `actionDigest` as `requestHash`.
-
-### packageDigest
-
-`computePackageDigest` is SHA-256 of the JCS of the whole validated verify request, prefixed `sha256:`. `applyEvidenceEffects` (`src/evidence-processing.ts`) attaches `meta.package_digest` only when `signed_evidence` is present and non-empty. The comment there states that requests without `signed_evidence` must keep the pre-F1 response shape, and the canonical body must not gain the field. The canonical builder copies `packageDigest` only from `meta.package_digest`.
-
-This MCP does not send `signed_evidence`. On this path `packageDigest` is not in the export. This MCP does not treat it as `requestHash`.
-
-## MCP rule
-
-`execute: true` on the Sentinel route requires all of the existing checks (signature, export digest, key, receipt id, fresh `validUntil`, signed verdict ALLOW, outer verdict matches) and:
-
-- every present export (`signed_export` and `signed_export_v2`, if that field is present) has a canonical `requestHash` of the form `sha256:` plus 64 lowercase hex digits
-- that value equals the hash of the current request, defined below
-
-If any present export lacks that field, the code is `request_hash_missing` and `execute` is false. If the field is present and differs, the code is `request_hash_mismatch` and `execute` is false. An outer ALLOW in either case is reported as `ERROR`. No flag turns execute back on. `mandateDigest`, `actionDigest`, and `packageDigest` do not fill the gap.
-
-`verify_trade` uses the same gate. A signed ALLOW there also stays non-executing until `requestHash` matches a request object. That client does not yet take `SENTINEL_TEST_MODE` or the deployment-protection header. Those apply to `verify_before_action` / `verify_decision`.
-
-## Request-hash contract
+## Profile and envelope
 
 | Item | Value |
 | --- | --- |
-| Profile | `thoughtproof.mcp.request_binding.v1` |
-| Field name | `requestHash`, a string on the canonical JSON object (v1 and v2) |
+| Profile | `thoughtproof.mcp.request_binding.v2` |
+| Signed field | `requestHash`, a string on every present export canonical (v1 and v2) |
 | Algorithm | SHA-256 |
-| Encoding | `sha256:` + lowercase hex, no `0x` prefix |
-| Preimage | UTF-8 bytes of the flat JCS document below |
-
-Flat JCS here means: object keys sorted by UTF-16 code unit, string values encoded with `JSON.stringify`, no insignificant whitespace. For this flat string object that is the same encoding as `canonicalJsonFlat` in `src/signed-export.ts` and as RFC 8785.
-
-Required keys are always present. Optional keys are omitted when the argument is missing or whitespace-only.
-
-| Key | Required | Source on this MCP call |
-| --- | --- | --- |
-| `profile` | yes | the constant above |
-| `mandate` | yes | trimmed `mandate` |
-| `proposed_action` | yes | trimmed `proposed_action` (the command) |
-| `reasoning` | yes | trimmed `reasoning` |
-| `context` | no | trimmed `context` after the repair prefix, when non-empty |
-| `mandate_kind` | no | trimmed `mandate_kind`, when non-empty |
-| `action_kind` | no | trimmed `action_kind`, when non-empty |
-
-Not separate keys: `mode` (routing only; Sentinel always sees `action_authorization`), host `quote` (a span of `mandate`), `in_reply_to` (already inside `context` when set).
-
-Example, pinned by `test/signed-export-binding.test.js`:
+| Encoding | `sha256:` + lowercase hex |
+| Preimage | UTF-8 bytes of the JCS (RFC 8785) of the envelope below |
 
 ```json
-{"mandate":"Work locally in this repo.","profile":"thoughtproof.mcp.request_binding.v1","proposed_action":"run_command: git status","reasoning":"Inspect the tree before editing."}
+{ "profile": "thoughtproof.mcp.request_binding.v2", "request": <API body> }
 ```
 
-`requestHash` is SHA-256 of that UTF-8 string. `run_command: git status` and `run_command: git status &` are different preimages.
+`<API body>` is the JSON object this client serialized on `POST /sentinel/verify`. It is built once. That same object is hashed and `JSON.stringify`'d onto the wire. The hash is of the object via JCS, not of one particular serialization, so key order and insignificant whitespace in the JSON text do not change it. Whitespace inside strings is preserved and does change it. JCS does not trim, case-fold, or Unicode-normalize text.
 
-The export digest stays the hash of the canonical string. `requestHash` is inside that string, so the existing Ed25519 signature covers it once Sentinel writes the field before signing. This MCP does not re-sign.
+Headers and credentials are not part of the preimage. That includes `X-Sentinel-Key`, `PAYMENT-SIGNATURE`, `User-Agent`, and any deployment-protection header.
 
-## Sentinel change proposal (separate approval)
+## What is in the body
 
-Do not implement this in Sentinel until it is approved on its own. Suggested shape:
+Decision calls (`verify_before_action` / `verify_decision`) send:
 
-1. When issuing both v1 and v2 canonical bodies, set `requestHash` from the contract above before `maybeIssueSignedExport` / `maybeIssueSignedExportV2`. Omit the export (or do not issue an ALLOW export) if the preimage cannot be built. Do not substitute `mandateDigest`, `actionDigest`, or `packageDigest`.
-2. Reconstruct the preimage from the verify request this MCP already sends, without a new top-level body field (today's validator rejects unknown top-level fields):
-   - `mandate`: the `User mandate:` block when present, otherwise the `Principal mandate (verbatim quote):` block, trimmed.
-   - `proposed_action`: the `Proposed action:` block, trimmed.
-   - `reasoning`: the `Agent reasoning:` block, trimmed.
-   - `context`: the `Context:` block, trimmed, omitted when absent.
-   - `mandate_kind`: `mandate.kind` when it is a non-empty string.
-   - `action_kind`: `mandate.action.kind` when it is a non-empty string.
-   - `profile`: the constant above.
-3. Put the same `requestHash` in v1 and v2. A mismatch between them must not verify as one ALLOW.
-4. Keep the salt and the structured commitment digests as they are. They answer a different question and do not cover the command on this path.
-5. `packageDigest` remains gated on `signed_evidence`. This MCP path still does not send `signed_evidence`.
+| Field | Presence |
+| --- | --- |
+| `claim` | always |
+| `evidence` | always |
+| `mode` | always `action_authorization` |
+| `tier` | always `checkpoint` or `standard` |
+| `mandate` | absent unless the host declared a kind. When present, it is `{ kind?, action?: { kind } }`. It is never `null` on this client. |
 
-Until that ships, this MCP fail-closes. A host that needs `execute: true` cannot get it from a current production export.
+Trade calls (`verify_trade`) send:
+
+| Field | Presence |
+| --- | --- |
+| `claim` | the action string, not trimmed |
+| `evidence` | `Thesis: …\n\nReasoning: …`, not trimmed |
+| `mode` | always `trade_execution` |
+| `tier` | `checkpoint` or `standard` |
+
+`situation` is sent only on the later RV call. It is not part of the Sentinel body, so this hash does not cover it.
+
+## Absence, null, and unknown fields
+
+- A missing optional field is an absent key. It is not sent as `null`.
+- A key whose value is `null` is part of the body and is hashed as `null`. That is a different preimage from the absent key.
+- `undefined` object members are omitted by JSON and by this JCS. They are the same as absent.
+- Unknown keys are kept. The hash is of the whole body. This client does not drop them, and Sentinel must not drop them either.
+
+Two tool calls that produce the same body have the same hash. A `Context:` section written inside `reasoning`, and the same text passed as `context`, are one example: the HTTP bodies are identical, so the hashes are identical. That pair is vector `raul-context-collapse`.
+
+## What this MCP requires before execute
+
+The existing signature, export digest, key, receipt id, fresh `validUntil`, and ALLOW match still apply. In addition, every present export canonical must carry `requestHash` in the form above, and that value must equal the hash of the body object this call sent. `mandateDigest`, `actionDigest`, and `packageDigest` do not satisfy it.
+
+Missing hash: `request_hash_missing`, `execute: false`. Outer ALLOW is reported as `ERROR` on the decision path and as not ALLOW on the trade path. Mismatch: `request_hash_mismatch`, same close. No flag turns execute back on. A trade call that fails this check does not call RV.
+
+## What the export binds today
+
+Unchanged from the previous note, and still not sufficient:
+
+- The export digest is SHA-256 of the canonical verdict string. The signature covers that string.
+- `mandateDigest` / `actionDigest` are salted hashes of the structured mandate object and `mandate.action` only. On the decision call that object is the kind object above, or absent. It does not contain the evidence text or the command. The salt is not inside the signed canonical.
+- `packageDigest` is attached only when `signed_evidence` is present. Neither client sends `signed_evidence` on these paths.
+
+## Sentinel change proposal
+
+Do not implement this in Sentinel until it is approved on its own.
+
+1. After parsing the verify request, compute `requestHash` as specified here over the parsed body. Use every key that parsed. Do not trim strings. Do not drop unknown keys. Do not reconstruct an earlier tool-argument shape.
+2. Sentinel computes that hash itself. It must not copy a client-supplied hash into the signature without recomputing it. A field inside the body is just more body content.
+3. Write the same `requestHash` into the v1 and v2 canonical bodies before signing. If the preimage cannot be built, do not issue an ALLOW export.
+4. Leave `mandateDigest`, `actionDigest`, and `packageDigest` as they are. They are not this field.
+
+Until that ships, this MCP fail-closes.

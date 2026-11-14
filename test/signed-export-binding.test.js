@@ -12,11 +12,8 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { mapSentinelEnvelope, verifyDecision } from "../dist/verify-decision.js";
 import { verifyTrade } from "../dist/verify-client.js";
-import {
-  canonicalRequestBinding,
-  computeRequestHash,
-  requestBindingDocument,
-} from "../dist/request-binding.js";
+import { computeRequestHash } from "../dist/request-binding.js";
+import { buildSentinelVerifyBody } from "../dist/sentinel-decision-client.js";
 import {
   assessSentinelBinding,
   buildExportSignedInput,
@@ -55,11 +52,13 @@ function keyDoc(publicKey, overrides = {}) {
  * with an ephemeral key. It proves only that this MCP checks requestHash.
  * It is not a Sentinel-issued export.
  */
-const SYNTHETIC_REQUEST = {
+const SYNTHETIC_INPUT = {
   mandate: "Synthetic binding fixture. Proves only the MCP check.",
   proposed_action: "run_command: git status",
   reasoning: "Inspect the tree.",
 };
+/** API body, not tool arguments. Ephemeral signatures over this object prove only the MCP check. */
+const SYNTHETIC_REQUEST = buildSentinelVerifyBody(SYNTHETIC_INPUT, "checkpoint");
 
 function issue(privateKey, verdict, options = {}) {
   const schema = options.schema ?? "sentinel.verdict.canonical.v1";
@@ -550,7 +549,7 @@ describe("requestHash binding (synthetic; proves only the MCP check)", () => {
   });
 
   it("rejects the same action when the mandate changes", async () => {
-    const artifact = issueBound(privateKey, "ALLOW", requestA);
+    const artifact = issueBound(privateKey, "ALLOW", buildSentinelVerifyBody(requestA, "checkpoint"));
     const env = await decide(
       { mandate: "Work locally in a different repo.", proposed_action: actionA, reasoning },
       artifact,
@@ -561,23 +560,22 @@ describe("requestHash binding (synthetic; proves only the MCP check)", () => {
   });
 
   it("executes matching request A and refuses request B when the synthetic requestHash matches A", async () => {
-    const artifact = issueBound(privateKey, "ALLOW", requestA);
+    const bodyA = buildSentinelVerifyBody(requestA, "checkpoint");
+    const artifact = issueBound(privateKey, "ALLOW", bodyA);
     const allow = await decide(requestA, artifact);
     assert.equal(allow.execute, true);
     assert.equal(allow.verdict, "ALLOW");
     assert.equal(allow.signed_export_verification.code, "ok");
     assert.match(JSON.stringify(allow.signed_export.canonical), /requestHash/);
 
-    const other = await decide(
-      { mandate, proposed_action: "run_command: git status &", reasoning },
-      artifact,
-    );
+    const otherInput = { mandate, proposed_action: "run_command: git status &", reasoning };
+    const other = await decide(otherInput, artifact);
     assert.equal(other.execute, false);
     assert.notEqual(other.verdict, "ALLOW");
     assert.equal(other.signed_export_verification.code, "request_hash_mismatch");
     assert.notEqual(
-      computeRequestHash(requestA),
-      computeRequestHash({ mandate, proposed_action: "run_command: git status &", reasoning }),
+      computeRequestHash(bodyA),
+      computeRequestHash(buildSentinelVerifyBody(otherInput, "checkpoint")),
     );
   });
 
@@ -596,18 +594,43 @@ describe("requestHash binding (synthetic; proves only the MCP check)", () => {
     assert.equal(env.signed_export_verification.code, "request_hash_missing");
   });
 
-  it("pins the request-binding canonical to flat JCS", () => {
-    const canonical = canonicalRequestBinding(requestA);
-    assert.equal(canonical, canonicalJsonFlat(requestBindingDocument(requestA)));
-    assert.equal(
-      canonical,
-      '{"mandate":"Work locally in this repo.","profile":"thoughtproof.mcp.request_binding.v1","proposed_action":"run_command: git status","reasoning":"Inspect the tree before editing."}',
-    );
-    assert.equal(computeRequestHash(requestA), `sha256:${createHash("sha256").update(canonical, "utf8").digest("hex")}`);
+  it("closes when any bound body field changes, and ignores JSON formatting", () => {
+    const body = buildSentinelVerifyBody(requestA, "checkpoint");
+    const artifact = issueBound(privateKey, "ALLOW", body);
+    const changes = {
+      claim: `${body.claim} `,
+      evidence: `${body.evidence} `,
+      mode: "trade_execution",
+      tier: "standard",
+      mandate: { kind: "local_command" },
+      "x-extra": "kept",
+    };
+    for (const [field, value] of Object.entries(changes)) {
+      const mutated = { ...body, [field]: value };
+      const env = mapSentinelEnvelope(
+        { ...response("ALLOW"), signed_export: artifact },
+        undefined,
+        bind(keys),
+        mutated,
+      );
+      assert.equal(env.execute, false, field);
+      assert.notEqual(env.verdict, "ALLOW", field);
+      assert.equal(env.signed_export_verification.code, "request_hash_mismatch", field);
+    }
+
+    const pretty = JSON.stringify(body, null, 2);
+    const reordered = `{"tier":"checkpoint","mode":"action_authorization","evidence":${JSON.stringify(body.evidence)},"claim":${JSON.stringify(body.claim)}}`;
+    assert.equal(computeRequestHash(JSON.parse(pretty)), computeRequestHash(body));
+    assert.equal(computeRequestHash(JSON.parse(reordered)), computeRequestHash(body));
+    const spaced = { ...body, claim: body.claim.replace("git status", "git  status") };
+    assert.notEqual(computeRequestHash(spaced), computeRequestHash(body));
+    const absent = { ...body };
+    delete absent.mandate;
+    assert.notEqual(computeRequestHash({ ...absent, mandate: null }), computeRequestHash(absent));
   });
 
   it("rejects a tampered signature even when requestHash matches", async () => {
-    const artifact = issueBound(privateKey, "ALLOW", requestA);
+    const artifact = issueBound(privateKey, "ALLOW", buildSentinelVerifyBody(requestA, "checkpoint"));
     const flipped = `0x${artifact.signature.slice(2, 3) === "a" ? "b" : "a"}${artifact.signature.slice(3)}`;
     const env = await decide(requestA, { ...artifact, signature: flipped });
     assert.equal(env.execute, false);
@@ -621,7 +644,8 @@ describe("sentinel vector fixtures (real v1 + v2 signing format)", () => {
   // scripts/fixtures/m1-export/export-valid.json
   // scripts/fixtures/m1-export-v2/export-v2-valid.json
   // Signed with kid tp-sentinel-export-ed25519-2026-09-vector (fixture seed,
-  // not the production private key). Generators set ttl = 86400, which is the
+  // not the production private key). These are format test vectors only.
+  // Generators set ttl = 86400, which is the
   // same condition as SENTINEL_EXPORT_TTL_SECONDS > 0: validUntil is present.
   const here = dirname(fileURLToPath(import.meta.url));
   const v1 = JSON.parse(

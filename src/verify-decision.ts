@@ -29,7 +29,6 @@ import {
   type SentinelObjection,
   type SentinelResponse,
 } from "./sentinel-decision-client.js";
-import type { RequestBindingInput } from "./request-binding.js";
 import { routeDecision, type DecisionMode, type DecisionSurface } from "./route-decision.js";
 import { SENTINEL_TEST_URL_REQUIRED } from "./sentinel-target.js";
 import {
@@ -382,7 +381,7 @@ export function mapSentinelEnvelope(
   body: SentinelResponse,
   inReplyTo?: string,
   binding?: SentinelBindingOptions,
-  request?: RequestBindingInput,
+  request?: unknown,
 ): DecisionEnvelope {
   const gated = gateOuterVerdict(body.verdict, body, binding, request);
   const verdict = gated.verdict;
@@ -537,7 +536,7 @@ export async function verifyDecision(
       fetchImpl: cfg.fetchImpl,
     });
     if (!result.ok) return errorEnvelope("sentinel", result.error, "", inReplyTo);
-    return mapSentinelEnvelope(result.body, inReplyTo, cfg.signedBinding, repaired);
+    return mapSentinelEnvelope(result.body, inReplyTo, cfg.signedBinding, result.request);
   } catch (err) {
     return errorEnvelope(surface, String(err), "", inReplyTo);
   }

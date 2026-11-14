@@ -10,7 +10,11 @@
  * mandate quote is wired *into* evidence — never as a sibling field.
  */
 
-import { SENTINEL_TEST_URL_REQUIRED } from "./sentinel-target.js";
+import {
+  headersForSentinelCall,
+  isRedirectResponse,
+  SENTINEL_TEST_URL_REQUIRED,
+} from "./sentinel-target.js";
 
 export const SENTINEL_VERIFY_URL = "https://sentinel.thoughtproof.ai/sentinel/verify";
 export const SENTINEL_OPENAPI_URL = "https://sentinel.thoughtproof.ai/openapi.json";
@@ -162,7 +166,7 @@ export interface SentinelDecisionClientConfig {
 }
 
 export type SentinelCallResult =
-  | { ok: true; status: number; body: SentinelResponse }
+  | { ok: true; status: number; body: SentinelResponse; request: SentinelVerifyBody }
   | { ok: false; status: number; error: string };
 
 /** Collapse runs of whitespace so newline/spacing drift can be detected. */
@@ -374,19 +378,6 @@ export function buildSentinelVerifyBody(
   return body;
 }
 
-function requestOrigin(url: string): string | undefined {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return undefined;
-  }
-}
-
-function isRedirectResponse(res: Response): boolean {
-  if (res.status >= 300 && res.status < 400) return true;
-  return res.status === 0 && res.type === "opaqueredirect";
-}
-
 export async function callSentinelDecision(
   input: SentinelDecisionInput,
   cfg: SentinelDecisionClientConfig,
@@ -403,22 +394,20 @@ export async function callSentinelDecision(
   }
 
   const url = cfg.url?.trim() || SENTINEL_VERIFY_URL;
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.3.1",
-    "X-Sentinel-Key": cfg.apiKey,
-  };
-  const protection = cfg.deploymentProtection;
-  if (protection && requestOrigin(url) === protection.origin) {
-    headers[protection.name] = protection.value;
-  }
+  const request = buildSentinelVerifyBody(input, cfg.tier ?? "checkpoint");
+  const headers = headersForSentinelCall({
+    url,
+    apiKey: cfg.apiKey,
+    userAgent: "thoughtproof-mcp/0.3.1",
+    protection: cfg.deploymentProtection,
+  });
 
   let res: Response;
   try {
     res = await fetchImpl(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(buildSentinelVerifyBody(input, cfg.tier ?? "checkpoint")),
+      body: JSON.stringify(request),
       redirect: "manual",
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -449,7 +438,7 @@ export async function callSentinelDecision(
 
   try {
     const parsed = JSON.parse(text) as SentinelResponse;
-    return { ok: true, status: res.status, body: parsed };
+    return { ok: true, status: res.status, body: parsed, request };
   } catch {
     return {
       ok: false,

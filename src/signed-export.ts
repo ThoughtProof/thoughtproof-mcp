@@ -30,7 +30,6 @@ import {
   REQUEST_HASH_FIELD,
   REQUEST_HASH_RE,
   requestHashesEqual,
-  type RequestBindingInput,
 } from "./request-binding.js";
 import {
   PINNED_EXPORT_KEYS,
@@ -38,8 +37,6 @@ import {
   type ExportKeyEntry,
   type ExportKeysDoc,
 } from "./sentinel-key-pin.js";
-
-export type { RequestBindingInput };
 
 export const EXPORT_DOMAIN = "thoughtproof.sentinel.export.v1";
 export const EXPORT_ALG = "Ed25519";
@@ -513,7 +510,7 @@ export function gateOuterVerdict(
   outerVerdict: unknown,
   body: unknown,
   options?: SentinelBindingOptions,
-  request?: RequestBindingInput,
+  request?: unknown,
 ): OuterVerdictGate {
   noteIgnoredBindingFlag(bindingEnv(options));
   const outer = String(outerVerdict ?? "ERROR");
@@ -562,7 +559,18 @@ export function gateOuterVerdict(
         verification: verificationOf(assessed, "request_hash_missing", false),
       };
     }
-    const expected = computeRequestHash(request);
+    let expected: string;
+    try {
+      expected = computeRequestHash(request);
+    } catch {
+      return {
+        verdict: "ERROR",
+        execute: false,
+        code: "request_hash_mismatch",
+        ...presented,
+        verification: verificationOf(assessed, "request_hash_mismatch", false),
+      };
+    }
     const matches = hashes.hashes.every((hash) => requestHashesEqual(hash, expected));
     if (!matches) {
       return {

@@ -108,7 +108,7 @@ const VERIFY_BEFORE_ACTION_DESCRIPTION =
   "ThoughtProof pre-action verification gate: verify before the agent pays, trades, writes, or deploys. " +
   "Call this BEFORE any consequential tool (payment, trade, transfer, publish, delete, deploy, irreversible write). " +
   "Returns { verdict, execute, objections, structured_objections, receipt_id, surface, loop, axes?, recommendation, in_reply_to?, signed_export?, signed_export_v2?, signed_export_verification? }. " +
-  "On the Sentinel route, execute is true only when the verified signed export is fresh, its verdict is ALLOW, that verdict matches the response, and its signed requestHash matches this mandate and proposed action. The signed export is returned unchanged with signed_export_verification so the host can re-verify it. " +
+  "On the Sentinel route, execute is true only when the verified signed export is fresh, its verdict is ALLOW, that verdict matches the response, and its signed requestHash matches the Sentinel request body for this call. The signed export is returned unchanged with signed_export_verification so the host can re-verify it. " +
   "execute is permission for the host to proceed, not proof the action was stopped. DQL still follows its aggregate verdict. A missing, invalid, expired, or contradicting signature does not execute (soft fail-closed; host must honor execute=false). " +
   "If structured_objections have severity blocked_until, repair using repair_hints and call again with in_reply_to set to that objection_id (new receipt; prior ALLOW does not carry). " +
   "Routes internally to DQL (spend/checkout) or Sentinel (irreversible exit). " +
@@ -349,6 +349,7 @@ server.tool(
   },
   async ({ action, thesis, reasoning, situation, stakeLevel }) => {
     try {
+      const target = resolveSentinelTarget(process.env);
       const result = await verifyTrade(
         { action, thesis, reasoning, situation, stakeLevel },
         {
@@ -356,6 +357,10 @@ server.tool(
           x402PaymentSignature: process.env.THOUGHTPROOF_X402_PAYSIG,
           sentinelTier:
             (process.env.SENTINEL_TIER as "checkpoint" | "standard" | undefined) ?? "checkpoint",
+          sentinelUrl: target.url,
+          sentinelTestMode: target.testMode,
+          sentinelTargetError: target.protectionError,
+          deploymentProtection: target.protection,
         }
       );
       return {
