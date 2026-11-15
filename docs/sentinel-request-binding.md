@@ -1,6 +1,6 @@
 # Sentinel request binding v2
 
-Status: this MCP checks `requestHash`. Sentinel does not issue it yet. Until Sentinel does, a signed ALLOW on `verify_before_action`, `verify_decision`, or `verify_trade` does not execute. This file is the contract and the change proposal. It does not change Sentinel.
+Status: this MCP checks `requestHash`. Sentinel computes and signs it since Sentinel #133 (merge commit `39310deb37d03b97f1eb5000078547fc64d19cc1`, ADR-0024): it hashes the parsed verify body with this profile and writes the same `requestHash` into the v1 and v2 export canonicals before signing. This file is the shared contract. It does not say which Sentinel deployment serves a given domain; check the deployment before relying on it. A Sentinel build without #133 issues exports with no `requestHash`; against such a build a signed ALLOW on `verify_before_action`, `verify_decision`, or `verify_trade` does not execute (`request_hash_missing`).
 
 Positive tests that return ALLOW use a synthetic export signed by an ephemeral key created in the test process. That proves only this MCP's comparison. It is not a Sentinel issuance and it is not production evidence. The committed v1 and v2 export fixtures use kid `tp-sentinel-export-ed25519-2026-09-vector`. Those files are format vectors for the export envelope, not request-binding evidence.
 
@@ -64,6 +64,21 @@ The existing signature, export digest, key, receipt id, fresh `validUntil`, and 
 
 Missing hash: `request_hash_missing`. Mismatch: `request_hash_mismatch`. On a signed ALLOW the decision verdict is `ERROR` and `execute` is false. On a signed UNCERTAIN, HOLD, or REVIEW the verdict is `UNCERTAIN` and `execute` is false. No flag turns execute back on. A trade call that fails this check does not call RV, even if a later RV response would have been ALLOW. A signed UNCERTAIN whose `requestHash` matches may still escalate to RV on a non-micro stake, as before.
 
+## Fail-closed codes and freshness
+
+`execute` stays false, and a signed non-BLOCK verdict does not escalate to RV, when the export check returns any of these codes:
+
+| Code | Meaning |
+| --- | --- |
+| `validUntil_required` | the signed export has no `validUntil` |
+| `request_hash_missing` | a present export canonical has no well-formed `requestHash` |
+| `request_hash_mismatch` | `requestHash` does not equal the hash of the body this call sent |
+| `expired` | now is later than `validUntil` + 30 seconds (`EXPORT_CLOCK_SKEW_SECONDS` in `src/signed-export.ts`); `now === validUntil + 30` is still fresh |
+| `signature_invalid` | the Ed25519 signature does not verify |
+| `key_not_found` | the `keyId` is not in the pinned key set |
+
+Other codes, such as `verdict_mismatch` and `key_expired`, also fail closed. This MCP has no TTL cap of its own: it does not cap, shorten, or rewrite the `validUntil` that Sentinel signed, and it has no 300-second limit. The export lifetime is set by Sentinel; the MCP only checks `validUntil` plus the 30-second skew.
+
 ## v1 limitation
 
 This binding proof covers the Sentinel path, including `verify_trade` at micro stake. It does not cover the full RV pipeline. `situation` is not in the Sentinel body, so it is not bound. This client does not cryptographically verify an RV response against the RV request that was just sent.
@@ -76,13 +91,13 @@ Unchanged from the previous note, and still not sufficient:
 - `mandateDigest` / `actionDigest` are salted hashes of the structured mandate object and `mandate.action` only. On the decision call that object is the kind object above, or absent. It does not contain the evidence text or the command. The salt is not inside the signed canonical.
 - `packageDigest` is attached only when `signed_evidence` is present. Neither client sends `signed_evidence` on these paths.
 
-## Sentinel change proposal
+## Sentinel implementation (#133)
 
-Do not implement this in Sentinel until it is approved on its own.
+The proposal that stood here is implemented in Sentinel #133 (`39310deb`, ADR-0024). Sentinel:
 
-1. After parsing the verify request, compute `requestHash` as specified here over the parsed body. Use every key that parsed. Do not trim strings. Do not drop unknown keys. Do not reconstruct an earlier tool-argument shape. Reject a lone surrogate in a key or a value. Do not canonicalize it.
-2. Sentinel computes that hash itself. It must not copy a client-supplied hash into the signature without recomputing it. A field inside the body is just more body content.
-3. Write the same `requestHash` into the v1 and v2 canonical bodies before signing. If the preimage cannot be built, do not issue an ALLOW export.
-4. Leave `mandateDigest`, `actionDigest`, and `packageDigest` as they are. They are not this field.
+1. Computes `requestHash` as specified here over the parsed verify body: every key that parsed, strings not trimmed, unknown keys kept, no reconstruction of an earlier tool-argument shape.
+2. Computes the hash itself. It does not copy a client-supplied hash into the signature.
+3. Writes the same `requestHash` into the v1 and v2 canonical bodies before signing. A lone surrogate in a key or a value fails closed: no ALLOW and no signed export.
+4. Leaves `mandateDigest`, `actionDigest`, and `packageDigest` unchanged. They are not this field.
 
-Until that ships, this MCP fail-closes.
+Both repositories check the same vectors (`test/fixtures/request-binding-v2.json`). Against a Sentinel without #133, this MCP still fail-closes.

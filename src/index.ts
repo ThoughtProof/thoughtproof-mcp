@@ -40,7 +40,7 @@ const ACTION_KIND_LIST = ACTION_KINDS.join(" | ");
 async function apiCall(path: string, body?: Record<string, unknown>): Promise<any> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.4.0-dev",
+    "User-Agent": "thoughtproof-mcp/0.4.0",
   };
   if (API_KEY) {
     headers["X-Operator-Key"] = API_KEY;
@@ -96,7 +96,7 @@ async function apiCall(path: string, body?: Record<string, unknown>): Promise<an
 
 const server = new McpServer({
   name: "thoughtproof",
-  version: "0.4.0-dev",
+  version: "0.4.0",
 });
 
 // Hero tool: pre-action verification gate.

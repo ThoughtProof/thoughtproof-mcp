@@ -4,13 +4,13 @@
 
 | Version | Supported |
 |---|---|
-| `0.3.x` (npm latest pin) | Yes |
-| `main` / unpublished `0.4.0-dev` | Best-effort; breaking changes possible |
+| `0.4.x` (proposed npm; this draft) | Yes |
+| `0.3.x` | Previous npm pin (`0.3.2` was latest before this draft) |
 | `< 0.3.0` | No |
 
 ## What this package is
 
-`thoughtproof-mcp` is a **local stdio MCP server**. It does not hard-kill the host process. Soft fail-closed means: missing keys, timeouts, HTTP 4xx/5xx, and non-ALLOW verdicts return `execute: false`. On the Sentinel route, `execute: true` requires a signed export that verifies under the pinned public export key, includes a `validUntil` still inside the clock-skew allowance, and whose verdict is ALLOW and matches the response. No environment flag can skip that check. `execute: true` is permission for the host, not proof the action was stopped. The host must honor that flag.
+`thoughtproof-mcp` is a **local stdio MCP server**. It does not hard-kill the host process. Soft fail-closed means: missing keys, timeouts, HTTP 4xx/5xx, and non-ALLOW verdicts return `execute: false`. On the Sentinel route, `execute: true` requires a signed export that verifies under the pinned public export key, includes a `validUntil` still inside the clock-skew allowance, whose verdict is ALLOW and matches the response, and whose `requestHash` matches the body that was sent. No environment flag can skip that check. `execute: true` is permission for the host, not proof the action was stopped. The host must honor that flag.
 
 It is **not** a remote HTTP MCP endpoint and **not** an identity / trust-score product. A catalog listing or HOL Guard score is **not** authorization to take the next action.
 

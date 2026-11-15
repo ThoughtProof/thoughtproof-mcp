@@ -1,8 +1,8 @@
 {
   "name": "thoughtproof-mcp",
-  "version": "0.4.0-dev",
+  "version": "0.4.0",
   "mcpName": "io.github.ThoughtProof/thoughtproof-mcp",
-  "description": "Local MCP server (0.4.0-dev unpublished). Hero tools verify_before_action / verify_decision; execute only on ALLOW. dqla_ path present; published pin is thoughtproof-mcp@0.3.2.",
+  "description": "Local MCP server. Hero tools verify_before_action / verify_decision; execute only on ALLOW. On the Sentinel path, execute also requires a fresh signed export whose requestHash matches the body that was sent.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -44,11 +44,11 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "zod": "^3.25.0"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.20.3",
@@ -58,6 +58,7 @@
   "files": [
     "dist",
     "CHANGELOG.md",
+    "docs/sentinel-request-binding.md",
     "server.json"
   ]
 }
