@@ -4,7 +4,7 @@
     "ThoughtProof"
   ],
   "name": "thoughtproof-mcp",
-  "description": "Pre-action verification gate: verify before pay/trade/write/deploy. Hero tools verify_before_action / verify_decision; execute true only on ALLOW. Published npm pin thoughtproof-mcp@0.3.2.",
+  "description": "Pre-action verification gate: verify before pay/trade/write/deploy. Hero tools verify_before_action / verify_decision; execute true only on ALLOW. npm thoughtproof-mcp@0.4.0.",
   "type": "mcp_server",
   "status": "stable",
   "framework": "@modelcontextprotocol/sdk",

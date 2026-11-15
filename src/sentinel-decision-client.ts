@@ -404,7 +404,7 @@ export async function callSentinelDecision(
   const headers = headersForSentinelCall({
     url,
     apiKey: cfg.apiKey,
-    userAgent: "thoughtproof-mcp/0.3.1",
+    userAgent: "thoughtproof-mcp/0.4.0",
     protection: cfg.deploymentProtection,
   });
 

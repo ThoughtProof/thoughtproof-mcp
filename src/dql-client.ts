@@ -119,7 +119,7 @@ export async function callDql(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "thoughtproof-mcp/0.3.1",
+    "User-Agent": "thoughtproof-mcp/0.4.0",
     ...buildDqlAuthHeaders(cfg.auth),
   };
 

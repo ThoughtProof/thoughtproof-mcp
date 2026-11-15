@@ -10,13 +10,13 @@ thoughtproof-mcp — local stdio. Hero tool `verify_decision` (DQL spend / Senti
 
 MCP server for [ThoughtProof](https://thoughtproof.ai) — pre-execution decision verification for AI agents.
 
-**Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`.
+**Hero tool:** `verify_decision`. It routes inside the tool to DQL (spend / checkout) or Sentinel (irreversible exit) and returns a fail-closed `execute` flag. `execute` is `true` only on a native `ALLOW`. On the Sentinel path, that also requires a verified signed export with a fresh `validUntil` and a `requestHash` that matches the body that was sent.
 
-This package is a **local stdio** MCP server (Node 18+) for Desktop / CLI hosts such as Cursor, Claude Desktop, Windsurf, and Cline. It is **not** a remote HTTP MCP server. It is **not** a Grok Web/Mobile custom connector.
+This package is a **local stdio** MCP server (Node 20+) for Desktop / CLI hosts such as Cursor, Claude Desktop, Windsurf, and Cline. It is **not** a remote HTTP MCP server. It is **not** a Grok Web/Mobile custom connector.
 
 Get keys at [https://app.thoughtproof.ai/pricing](https://app.thoughtproof.ai/pricing).
 
-Unpublished work is documented in [UNRELEASED.md](./UNRELEASED.md).
+See [CHANGELOG.md](./CHANGELOG.md) for 0.4.0. Remaining unpublished notes are in [UNRELEASED.md](https://github.com/ThoughtProof/thoughtproof-mcp/blob/main/UNRELEASED.md).
 
 ## Quick Start
 
@@ -25,7 +25,7 @@ Unpublished work is documented in [UNRELEASED.md](./UNRELEASED.md).
   "mcpServers": {
     "thoughtproof": {
       "command": "npx",
-      "args": ["-y", "thoughtproof-mcp@0.3.2"],
+      "args": ["-y", "thoughtproof-mcp@0.4.0"],
       "env": {
         "DQL_API_KEY": "<YOUR_DQL_VERIFY_KEY>"
       }
@@ -34,7 +34,7 @@ Unpublished work is documented in [UNRELEASED.md](./UNRELEASED.md).
 }
 ```
 
-Install with `npx -y thoughtproof-mcp@0.3.2`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
+Install with `npx -y thoughtproof-mcp@0.4.0`. Works with **Claude Desktop**, **Cursor**, **Windsurf**, **Cline**, and other local stdio MCP clients.
 
 ## Tools
 
@@ -72,6 +72,8 @@ Pre-execution gate for a proposed action. Routing is inside the tool — not an 
 
 `execute` is `true` only on `ALLOW`. `REVIEW`, `UNCERTAIN`, `BLOCK`, timeouts, HTTP 402/4xx/5xx, and missing keys return `execute: false`. Fail-closed is soft at the protocol layer — the tool does not hard-stop the host. Replan is a new call (new receipt).
 
+**DQL retries and billing:** 0.4.0 sends neither `Idempotency-Key` nor `X-Request-Id` to DQL and does not automatically retry. Repeating a tool call, including after a timeout, starts a new verification that can be charged separately. DQL's server-side replay protection requires the same explicit request ID and is not an end-to-end guarantee of this MCP client.
+
 ### `verify_claim`
 
 Verify any claim or AI-generated reasoning via RV (`POST /v1/check`). Unchanged.
@@ -94,7 +96,7 @@ Look up an agent's composite trust score on the ERC-8004 registry.
 
 ### `verify_trade`
 
-Optional pre-execution gate for trading agents (Sentinel → RV). Not the default `verify_decision` path. See [VERIFY_TRADE.md](./VERIFY_TRADE.md).
+Optional pre-execution gate for trading agents (Sentinel → RV). Not the default `verify_decision` path. See [VERIFY_TRADE.md](https://github.com/ThoughtProof/thoughtproof-mcp/blob/main/VERIFY_TRADE.md).
 
 ## Configuration
 
@@ -124,7 +126,7 @@ For local MCP clients, point `command` at `node` and `args` at `dist/index.js` a
 
 ## Security
 
-See [SECURITY.md](./SECURITY.md) for supported versions, private reporting (`security@thoughtproof.ai`), and key handling (`dqlk_…` for MCP hero — never commit real keys).
+See [SECURITY.md](https://github.com/ThoughtProof/thoughtproof-mcp/blob/main/SECURITY.md) for supported versions, private reporting (`security@thoughtproof.ai`), and key handling (`dqlk_…` for MCP hero — never commit real keys).
 
 HOL listing / Guard scanner score is a **review baseline only**. It is **not** next-action authorization and not a substitute for fail-closed host behavior (`execute: true` only on ALLOW).
 
